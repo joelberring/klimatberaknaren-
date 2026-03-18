@@ -1,0 +1,64 @@
+{
+  "stockholmProfile": "Stockholm MVP 2026",
+  "datasets": [
+    {
+      "dataset": "building-typologies",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": ["scb-statistikdatabasen", "stockholm-open-data"],
+      "status": "active"
+    },
+    {
+      "dataset": "energy-benchmarks",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": ["scb-statistikdatabasen", "energimyndigheten", "smhi-open"],
+      "status": "active"
+    },
+    {
+      "dataset": "emissions-factors",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": ["energimyndigheten", "stockholm-exergi"],
+      "status": "active"
+    },
+    {
+      "dataset": "mobility-reference",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": [
+        "scb-kollektivtrafiknara",
+        "trafiklab-gtfs",
+        "stockholm-miljobarometern"
+      ],
+      "status": "active"
+    },
+    {
+      "dataset": "retrofit-reference",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": [
+        "boverket-ombyggnad",
+        "scb-ombyggnad"
+      ],
+      "status": "active"
+    },
+    {
+      "dataset": "standard-profiles",
+      "version": "2026.03",
+      "updatedAt": "2026-03-18",
+      "sourceIds": [
+        "sgbc-miljobyggnad",
+        "sgbc-breeam-se"
+      ],
+      "status": "active"
+    },
+    {
+      "dataset": "boverket-ed-api-adapter",
+      "version": "planned",
+      "updatedAt": "2026-03-18",
+      "sourceIds": ["boverket-ed-api"],
+      "status": "planned"
+    }
+  ]
+}

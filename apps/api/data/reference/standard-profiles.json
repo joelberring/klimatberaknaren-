@@ -1,0 +1,102 @@
+[
+  {
+    "id": "miljobyggnad-nybyggnad-4.1-silver",
+    "scheme": "miljobyggnad",
+    "version": "4.1",
+    "level": "Silver",
+    "label": "Miljöbyggnad Nybyggnad 4.1 Silver",
+    "summary": "Screeningprofil som översätter Miljöbyggnads energirelaterade ambitionsnivå till appens jämförelsemått för tidiga skeden.",
+    "sourceIds": ["sgbc-miljobyggnad"],
+    "applicableBuildingTypes": ["smahus", "flerbostadshus", "kontor", "skola", "handel"],
+    "applicableInterventions": ["nybyggnad", "ombyggnad", "pabyggnad"],
+    "metrics": {
+      "perM2": 560,
+      "perPerson": 21000,
+      "perHa": 5600000
+    },
+    "notes": [
+      "Ej officiell certifieringsbedömning, utan screeningprofil kopplad till tidiga klimatjämförelser.",
+      "Baserad på SGBC:s Miljöbyggnad Nybyggnad 4.1 som aktuell manual för nyproduktion."
+    ]
+  },
+  {
+    "id": "miljobyggnad-nybyggnad-4.1-guld",
+    "scheme": "miljobyggnad",
+    "version": "4.1",
+    "level": "Guld",
+    "label": "Miljöbyggnad Nybyggnad 4.1 Guld",
+    "summary": "Stramare screeningprofil för projekt som vill jämföras mot en hög ambitionsnivå inom Miljöbyggnad.",
+    "sourceIds": ["sgbc-miljobyggnad"],
+    "applicableBuildingTypes": ["smahus", "flerbostadshus", "kontor", "skola", "handel"],
+    "applicableInterventions": ["nybyggnad", "ombyggnad", "pabyggnad"],
+    "metrics": {
+      "perM2": 500,
+      "perPerson": 18500,
+      "perHa": 5000000
+    },
+    "notes": [
+      "Ej officiell certifieringsbedömning, utan screeningprofil kopplad till tidiga klimatjämförelser.",
+      "Baserad på SGBC:s Miljöbyggnad Nybyggnad 4.1 som aktuell manual för nyproduktion."
+    ]
+  },
+  {
+    "id": "miljobyggnad-ombyggnad-4.0-silver",
+    "scheme": "miljobyggnad",
+    "version": "4.0",
+    "level": "Silver",
+    "label": "Miljöbyggnad Ombyggnad 4.0 Silver",
+    "summary": "Screeningprofil för ombyggnadsprojekt med fokus på energiförbättring och återbruk av befintlig byggnad.",
+    "sourceIds": ["sgbc-miljobyggnad"],
+    "applicableBuildingTypes": ["smahus", "flerbostadshus", "kontor", "skola", "handel"],
+    "applicableInterventions": ["ombyggnad", "pabyggnad"],
+    "metrics": {
+      "perM2": 520,
+      "perPerson": 19500,
+      "perHa": 5200000
+    },
+    "notes": [
+      "Ej officiell certifieringsbedömning, utan screeningprofil för jämförelse i tidigt skede.",
+      "Miljöbyggnad Ombyggnad 4.0 kan registreras från 6 mars 2025 enligt SGBC:s nya BGO-information."
+    ]
+  },
+  {
+    "id": "breeam-se-v6-very-good",
+    "scheme": "breeam-se",
+    "version": "6.0",
+    "level": "Very Good",
+    "label": "BREEAM-SE v6 Very Good",
+    "summary": "Screeningprofil för projekt som vill jämföras mot en stark men inte maximal hållbarhetsnivå i BREEAM-SE.",
+    "sourceIds": ["sgbc-breeam-se"],
+    "applicableBuildingTypes": ["flerbostadshus", "kontor", "skola", "handel"],
+    "applicableInterventions": ["nybyggnad", "ombyggnad", "pabyggnad"],
+    "metrics": {
+      "perM2": 590,
+      "perPerson": 22000,
+      "perHa": 5900000
+    },
+    "notes": [
+      "BREEAM använder nivåer som Pass, Good, Very Good, Excellent och Outstanding, inte Silver/Guld.",
+      "Detta är en screeningprofil och inte en officiell BREEAM-bedömning."
+    ]
+  },
+  {
+    "id": "breeam-se-v6-excellent",
+    "scheme": "breeam-se",
+    "version": "6.0",
+    "level": "Excellent",
+    "label": "BREEAM-SE v6 Excellent",
+    "summary": "Screeningprofil för projekt som vill jämföras mot en mycket hög ambitionsnivå inom BREEAM-SE.",
+    "sourceIds": ["sgbc-breeam-se"],
+    "applicableBuildingTypes": ["flerbostadshus", "kontor", "skola", "handel"],
+    "applicableInterventions": ["nybyggnad", "ombyggnad", "pabyggnad"],
+    "metrics": {
+      "perM2": 525,
+      "perPerson": 19500,
+      "perHa": 5250000
+    },
+    "notes": [
+      "BREEAM använder nivåer som Pass, Good, Very Good, Excellent och Outstanding, inte Silver/Guld.",
+      "Detta är en screeningprofil och inte en officiell BREEAM-bedömning."
+    ]
+  }
+]

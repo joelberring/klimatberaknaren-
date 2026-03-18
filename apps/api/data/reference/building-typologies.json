@@ -1,0 +1,73 @@
+{
+  "smahus": {
+    "displayName": "Småhus",
+    "frameVolumeM3PerM2": {
+      "tra": 0.14,
+      "betong": 0.2,
+      "stal": 0.1,
+      "hybrid": 0.16
+    },
+    "supplementaryKgCo2ePerM2": {
+      "foundation": 85,
+      "envelope": 70,
+      "installations": 48
+    }
+  },
+  "flerbostadshus": {
+    "displayName": "Flerbostadshus",
+    "frameVolumeM3PerM2": {
+      "tra": 0.18,
+      "betong": 0.26,
+      "stal": 0.13,
+      "hybrid": 0.21
+    },
+    "supplementaryKgCo2ePerM2": {
+      "foundation": 112,
+      "envelope": 82,
+      "installations": 70
+    }
+  },
+  "kontor": {
+    "displayName": "Kontor",
+    "frameVolumeM3PerM2": {
+      "tra": 0.15,
+      "betong": 0.24,
+      "stal": 0.16,
+      "hybrid": 0.2
+    },
+    "supplementaryKgCo2ePerM2": {
+      "foundation": 125,
+      "envelope": 88,
+      "installations": 95
+    }
+  },
+  "skola": {
+    "displayName": "Skola",
+    "frameVolumeM3PerM2": {
+      "tra": 0.16,
+      "betong": 0.22,
+      "stal": 0.14,
+      "hybrid": 0.18
+    },
+    "supplementaryKgCo2ePerM2": {
+      "foundation": 105,
+      "envelope": 80,
+      "installations": 78
+    }
+  },
+  "handel": {
+    "displayName": "Handel",
+    "frameVolumeM3PerM2": {
+      "tra": 0.11,
+      "betong": 0.18,
+      "stal": 0.2,
+      "hybrid": 0.17
+    },
+    "supplementaryKgCo2ePerM2": {
+      "foundation": 115,
+      "envelope": 76,
+      "installations": 82
+    }
+  }
+}
+

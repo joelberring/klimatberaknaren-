@@ -1,0 +1,146 @@
+[
+  {
+    "id": "scb-statistikdatabasen",
+    "title": "Statistikdatabasen",
+    "publisher": "SCB",
+    "license": "CC0 1.0",
+    "url": "https://www.scb.se/hitta-statistik/statistikdatabasen/",
+    "note": "Används som primär källa för statistik och schablonvärden.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "energimyndigheten",
+    "title": "Energistatistik för byggnader",
+    "publisher": "Energimyndigheten",
+    "license": "Öppna data/publicerade tabeller",
+    "url": "https://www.energimyndigheten.se/statistik/",
+    "note": "Kompletterar SCB med nationella energireferenser.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "smhi-open",
+    "title": "SMHI öppna data",
+    "publisher": "SMHI",
+    "license": "CC BY 4.0",
+    "url": "https://opendata.smhi.se/",
+    "note": "Används för Stockholm-klimatprofil i referensdata, ej live i runtime.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "stockholm-open-data",
+    "title": "Stockholms öppna geodata",
+    "publisher": "Stockholms stad",
+    "license": "Öppen licens enligt stadens villkor",
+    "url": "https://start.stockholm/om-stockholms-stad/sa-arbetar-staden/it-och-digitalisering/oppna-data/",
+    "note": "Planerad för framtida byggnadsmatchning, ej kritisk i MVP-flödet.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "boverket-ed-api",
+    "title": "Energideklarationsregistret API",
+    "publisher": "Boverket",
+    "license": "Gratis basdata, avtal krävs",
+    "url": "https://www.boverket.se/",
+    "note": "Adapter finns bakom feature flag tills åtkomst och avtal är klara.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "boverket-klimatdeklaration",
+    "title": "Klimatdeklaration för byggnader",
+    "publisher": "Boverket",
+    "license": "Offentlig vägledning",
+    "url": "https://www.boverket.se/sv/byggande/hallbart-byggande-och-forvaltning/klimatdeklaration/",
+    "note": "Används som svensk metod- och standardvägledning för klimatberäkning i byggskedet.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "boverket-ben",
+    "title": "BEN och brukarindata för energiberäkning",
+    "publisher": "Boverket",
+    "license": "Offentlig vägledning",
+    "url": "https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/boverkets-byggregler/energihushallning/byggnadens-energianvandning-baserad-pa-berakning/brukarindata-och-klimatdata/",
+    "note": "Används som metodstöd för normalår, brukarindata och energiberäkning.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "stockholm-exergi",
+    "title": "Fjärrvärmens klimatvärden",
+    "publisher": "Stockholm Exergi",
+    "license": "Publicerad referensinformation",
+    "url": "https://www.stockholmexergi.se/",
+    "note": "Används som lokal referens för fjärrvärmefaktor i Stockholm.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "glazing-research",
+    "title": "An evaluation of the glazing type impact on building energy performance",
+    "publisher": "Journal of Energy Systems",
+    "license": "Publicerad forskningsartikel",
+    "url": "https://dergipark.org.tr/en/doi/10.30521/jes.945193",
+    "note": "Används som stöd för att glasandel påverkar energibehovet när schablonenergi används.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "scb-kollektivtrafiknara",
+    "title": "SCB statistik om kollektivtrafiknära läge",
+    "publisher": "SCB",
+    "license": "CC0 1.0",
+    "url": "https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__MI__MI1303/",
+    "note": "Används som statistiskt ankare för tillgänglighetsband och kollektivtrafiknära läge.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "trafiklab-gtfs",
+    "title": "GTFS Regional och hållplatsdata",
+    "publisher": "Trafiklab",
+    "license": "Öppna data enligt Trafiklabs villkor",
+    "url": "https://www.trafiklab.se/api/gtfs-datasets/gtfs-regional/",
+    "note": "Används som metodkälla för hållplatser, stationer och schemalagd kollektivtrafik.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "stockholm-miljobarometern",
+    "title": "Miljöbarometern kollektivtrafik",
+    "publisher": "Stockholms stad",
+    "license": "Offentlig statistik och indikatorer",
+    "url": "https://miljobarometern.stockholm.se/trafik/kollektivtrafik/",
+    "note": "Används för Stockholm-först-kalibrering av resvaneprofiler.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "boverket-ombyggnad",
+    "title": "Boverkets vägledning om ombyggnad",
+    "publisher": "Boverket",
+    "license": "Offentlig vägledning",
+    "url": "https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/andring-av-byggnader/ombyggnad/",
+    "note": "Används för definitioner, avgränsningar och regelmässig förståelse av ombyggnad.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "scb-ombyggnad",
+    "title": "SCB statistik om ombyggnad av flerbostadshus",
+    "publisher": "SCB",
+    "license": "CC0 1.0",
+    "url": "https://www.scb.se/hitta-statistik/statistik-efter-amne/boende-bebyggelse-och-mark/byggande-och-ombyggnad/bygglov-nybyggnad-och-ombyggnad/pong/tabell-och-diagram/ombyggnad/ombyggnad-av-flerbostadshus-oversiktstabell-preliminara-siffror/",
+    "note": "Används som statistiskt stöd för screeningmodellen för ombyggnad och påbyggnad.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "sgbc-miljobyggnad",
+    "title": "Miljöbyggnad",
+    "publisher": "Sweden Green Building Council",
+    "license": "Manual och vägledning enligt SGBC:s villkor",
+    "url": "https://www.sgbc.se/certifiering/miljobyggnad/",
+    "note": "Används som officiell svensk standardreferens för Miljöbyggnad-profiler i appen.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "sgbc-breeam-se",
+    "title": "BREEAM-SE",
+    "publisher": "Sweden Green Building Council",
+    "license": "Manual och vägledning enligt SGBC:s villkor",
+    "url": "https://www.sgbc.se/certifiering/breeam/",
+    "note": "Används som officiell svensk standardreferens för BREEAM-SE-profiler i appen.",
+    "updatedAt": "2026-03-18"
+  }
+]

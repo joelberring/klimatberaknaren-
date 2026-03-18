@@ -1,0 +1,26 @@
+{
+  "title": "SCB Energi Stockholm 2026",
+  "updated": "2026-03-01",
+  "data": [
+    {
+      "key": ["smahus"],
+      "values": ["155"]
+    },
+    {
+      "key": ["flerbostadshus"],
+      "values": ["145"]
+    },
+    {
+      "key": ["kontor"],
+      "values": ["170"]
+    },
+    {
+      "key": ["skola"],
+      "values": ["160"]
+    },
+    {
+      "key": ["handel"],
+      "values": ["185"]
+    }
+  ]
+}

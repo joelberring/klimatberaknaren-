@@ -1,0 +1,48 @@
+{
+  "smahus": {
+    "displayName": "SCB/Energimyndigheten småhus schablon",
+    "standards": {
+      "aldre": 155,
+      "normal": 110,
+      "modern": 72,
+      "passivhus": 35
+    }
+  },
+  "flerbostadshus": {
+    "displayName": "SCB/Energimyndigheten flerbostadshus schablon",
+    "standards": {
+      "aldre": 145,
+      "normal": 104,
+      "modern": 68,
+      "passivhus": 32
+    }
+  },
+  "kontor": {
+    "displayName": "SCB/Energimyndigheten kontor schablon",
+    "standards": {
+      "aldre": 170,
+      "normal": 125,
+      "modern": 85,
+      "passivhus": 45
+    }
+  },
+  "skola": {
+    "displayName": "SCB/Energimyndigheten skolor schablon",
+    "standards": {
+      "aldre": 160,
+      "normal": 115,
+      "modern": 78,
+      "passivhus": 40
+    }
+  },
+  "handel": {
+    "displayName": "SCB/Energimyndigheten handel schablon",
+    "standards": {
+      "aldre": 185,
+      "normal": 145,
+      "modern": 100,
+      "passivhus": 55
+    }
+  }
+}
+

@@ -1,0 +1,145 @@
+[
+  {
+    "id": "method-embodied-standard",
+    "sourceId": "boverket-klimatdeklaration",
+    "evidenceType": "standard",
+    "title": "Klimatdeklaration och livscykelmodul A1-A5 för byggnader",
+    "publisher": "Boverket",
+    "url": "https://www.boverket.se/sv/byggande/hallbart-byggande-och-forvaltning/klimatdeklaration/",
+    "citationShort": "Boverket klimatdeklaration, i linje med EN 15978 för byggnaders klimatberäkning.",
+    "appliesTo": ["embodied.frame", "embodied.foundation", "embodied.envelope", "embodied.installations", "totals", "perM2", "perPerson", "perHa"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-energy-benchmark",
+    "sourceId": "scb-statistikdatabasen",
+    "evidenceType": "official-statistic",
+    "title": "Schabloner för energianvändning per byggnadstyp",
+    "publisher": "SCB",
+    "url": "https://www.scb.se/hitta-statistik/statistikdatabasen/",
+    "citationShort": "SCB Statistikdatabasen, typologibaserade energi- och byggnadsdata.",
+    "appliesTo": ["operational.heating", "operational.electricity", "perM2", "benchmark.perM2.normal", "benchmark.perM2.target"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-ben-normalbruk",
+    "sourceId": "boverket-ben",
+    "evidenceType": "standard",
+    "title": "Normalt brukande och normalår i energiberäkning",
+    "publisher": "Boverket",
+    "url": "https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/boverkets-byggregler/energihushallning/byggnadens-energianvandning-baserad-pa-berakning/brukarindata-och-klimatdata/",
+    "citationShort": "Boverket BEN och brukarindata för energiberäkning.",
+    "appliesTo": ["operational.heating", "operational.electricity"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-local-district-heating",
+    "sourceId": "stockholm-exergi",
+    "evidenceType": "provider-data",
+    "title": "Lokal fjärrvärmefaktor för Stockholm",
+    "publisher": "Stockholm Exergi",
+    "url": "https://www.stockholmexergi.se/",
+    "citationShort": "Stockholm Exergis publicerade klimatvärden för fjärrvärme.",
+    "appliesTo": ["operational.heating"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-glazing-adjustment",
+    "sourceId": "glazing-research",
+    "evidenceType": "research",
+    "title": "Glasandel som påverkansfaktor i energiberäkning",
+    "publisher": "Journal of Energy Systems",
+    "url": "https://dergipark.org.tr/en/doi/10.30521/jes.945193",
+    "citationShort": "Usta & Zengin, 2022. Glazing impacts building energy performance.",
+    "appliesTo": ["operational.heating", "operational.electricity"],
+    "versionOrYear": "2022"
+  },
+  {
+    "id": "method-foundation-proxy",
+    "sourceId": "boverket-klimatdeklaration",
+    "evidenceType": "internal-assumption",
+    "title": "Proxy för grundläggning från byggnadstyp och grundläggningsval",
+    "publisher": "Intern metod ovanpå Boverkets klimatdeklarationsram",
+    "url": "https://www.boverket.se/sv/byggande/hallbart-byggande-och-forvaltning/klimatdeklaration/",
+    "citationShort": "Intern schablon för screening, kalibrerad mot typologivärden och klimatdeklarationsram.",
+    "appliesTo": ["site.foundation"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-land-proxy",
+    "sourceId": "smhi-open",
+    "evidenceType": "internal-assumption",
+    "title": "Proxy för marktyp och platsutnyttjande i tidig planscreening",
+    "publisher": "Intern metod med stöd av SMHI-klimatprofil och öppna planantaganden",
+    "url": "https://opendata.smhi.se/",
+    "citationShort": "Intern screeningpost för markeffekt, används endast i tidigt skede.",
+    "appliesTo": ["site.land", "perHa"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-parking-proxy",
+    "sourceId": "boverket-klimatdeklaration",
+    "evidenceType": "internal-assumption",
+    "title": "Proxy för parkeringsrelaterad klimatpåverkan",
+    "publisher": "Intern metod ovanpå byggskedesram för anläggningsdelar",
+    "url": "https://www.boverket.se/sv/byggande/hallbart-byggande-och-forvaltning/klimatdeklaration/",
+    "citationShort": "Intern schablon per parkeringsplats för kommunal scenariojämförelse.",
+    "appliesTo": ["site.parking"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-mobility-accessibility",
+    "sourceId": "scb-kollektivtrafiknara",
+    "evidenceType": "official-statistic",
+    "title": "Tillgänglighetsband för kollektivtrafiknära läge",
+    "publisher": "SCB",
+    "url": "https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__MI__MI1303/",
+    "citationShort": "SCB tabeller om befolkning och bostäder i kollektivtrafiknära läge används som ankare för tillgänglighetsband.",
+    "appliesTo": ["mobility.total", "mobility.transit", "mobility.car", "mobility.walkCycle", "mobility.serviceTrips", "totals", "perPerson"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-mobility-gtfs",
+    "sourceId": "trafiklab-gtfs",
+    "evidenceType": "provider-data",
+    "title": "Hållplats- och stationsnära mobilitetsproxy",
+    "publisher": "Trafiklab",
+    "url": "https://www.trafiklab.se/api/gtfs-datasets/gtfs-regional/",
+    "citationShort": "GTFS-baserade hållplats- och stationsdata används för närhetsproxy i Stockholm-först-kalibreringen.",
+    "appliesTo": ["mobility.total", "mobility.transit", "mobility.car", "mobility.walkCycle", "mobility.serviceTrips"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-mobility-stockholm",
+    "sourceId": "stockholm-miljobarometern",
+    "evidenceType": "official-statistic",
+    "title": "Stockholms res- och kollektivtrafikindikatorer",
+    "publisher": "Stockholms stad",
+    "url": "https://miljobarometern.stockholm.se/trafik/kollektivtrafik/",
+    "citationShort": "Miljöbarometern används för försiktig kalibrering av färdmedelsprofiler i Stockholm.",
+    "appliesTo": ["mobility.total", "mobility.transit", "mobility.car", "mobility.walkCycle"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-ombyggnad-definition",
+    "sourceId": "boverket-ombyggnad",
+    "evidenceType": "standard",
+    "title": "Definition och avgränsning av ombyggnad",
+    "publisher": "Boverket",
+    "url": "https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/andring-av-byggnader/ombyggnad/",
+    "citationShort": "Boverkets definition av ombyggnad används som regelmässigt stöd för interventionstyper.",
+    "appliesTo": ["baseline.existing", "baseline.delta", "site.foundation", "totals"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-retrofit-proxy",
+    "sourceId": "scb-ombyggnad",
+    "evidenceType": "internal-assumption",
+    "title": "Screeningproxy för ombyggnad och påbyggnad",
+    "publisher": "Intern metod med stöd av SCB:s ombyggnadsstatistik",
+    "url": "https://www.scb.se/hitta-statistik/statistik-efter-amne/boende-bebyggelse-och-mark/byggande-och-ombyggnad/bygglov-nybyggnad-och-ombyggnad/pong/tabell-och-diagram/ombyggnad/ombyggnad-av-flerbostadshus-oversiktstabell-preliminara-siffror/",
+    "citationShort": "Regelstyrd screeningmodell för ombyggnad/påbyggnad med öppet redovisade schabloner.",
+    "appliesTo": ["baseline.existing", "baseline.delta", "totals", "embodied.frame", "operational.heating", "operational.electricity", "site.reinforcement"],
+    "versionOrYear": "2026"
+  }
+]

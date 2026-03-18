@@ -1,0 +1,156 @@
+import { describe, expect, it } from "vitest";
+
+import { calculateClimateImpact } from "../src/services/calculator";
+
+describe("calculateClimateImpact", () => {
+  it("uses fallback benchmark energy when no specific energy input is provided", () => {
+    const result = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 1200,
+      buildYear: 2005,
+      frameMaterial: "betong",
+      energyStandard: "modern",
+      heatingType: "fjarrvarme"
+    });
+
+    expect(result.operational.annualKgCo2e).toBe(4937);
+    expect(result.operational.lifetimeKgCo2e).toBe(246850);
+  });
+
+  it("reduces annual operational impact when low U-values are provided", () => {
+    const baseline = calculateClimateImpact({
+      buildingType: "smahus",
+      grossFloorAreaM2: 180,
+      buildYear: 2018,
+      frameMaterial: "tra",
+      energyStandard: "modern",
+      heatingType: "varmepump"
+    });
+
+    const improvedEnvelope = calculateClimateImpact({
+      buildingType: "smahus",
+      grossFloorAreaM2: 180,
+      buildYear: 2018,
+      frameMaterial: "tra",
+      energyStandard: "modern",
+      heatingType: "varmepump",
+      uValues: {
+        yttervagg: 0.18,
+        tak: 0.11,
+        fonster: 0.9
+      }
+    });
+
+    expect(improvedEnvelope.operational.annualKgCo2e).toBeLessThan(
+      baseline.operational.annualKgCo2e
+    );
+  });
+
+  it("returns embodied breakdown for chosen frame material", () => {
+    const result = calculateClimateImpact({
+      buildingType: "kontor",
+      grossFloorAreaM2: 1000,
+      buildYear: 2020,
+      frameMaterial: "stal",
+      energyStandard: "modern",
+      heatingType: "el",
+      specificEnergyUseKwhM2Year: 90
+    });
+
+    const frameItem = result.embodied.breakdown.find((item) => item.key === "frame");
+
+    expect(frameItem?.label).toContain("Stål");
+    expect(frameItem?.valueKgCo2e).toBe(288000);
+  });
+
+  it("builds traceable explanations and per-hectare metric when site inputs are provided", () => {
+    const result = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      siteAreaM2: 6000,
+      parkingSpaces: 12,
+      landType: "gronyta",
+      foundationType: "palar"
+    });
+
+    expect(result.perHa?.value).toBeGreaterThan(0);
+    expect(result.explanationIndex["site.foundation"]).toBeTruthy();
+    expect(result.explanations.find((item) => item.traceKey === "site.parking")).toBeTruthy();
+    expect(result.explanations.find((item) => item.traceKey === "mobility.total")).toBeTruthy();
+    expect(result.sources.length).toBeGreaterThan(0);
+  });
+
+  it("reduces mobility impact when transit overrides indicate stronger accessibility", () => {
+    const lowAccess = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 24,
+      transitOverrides: {
+        distanceToTransitStopM: 1200,
+        distanceToRailStationM: 4000,
+        departuresPerHour: 2
+      }
+    });
+
+    const highAccess = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 6,
+      transitOverrides: {
+        distanceToTransitStopM: 250,
+        distanceToRailStationM: 700,
+        departuresPerHour: 12
+      }
+    });
+
+    expect(highAccess.mobility.annualKgCo2e).toBeLessThan(lowAccess.mobility.annualKgCo2e);
+    expect(highAccess.totals.value).toBeLessThan(lowAccess.totals.value);
+  });
+
+  it("shows lower embodied total for ombyggnad than equivalent nybyggnad when retention is high", () => {
+    const newBuild = calculateClimateImpact({
+      buildingType: "kontor",
+      grossFloorAreaM2: 3000,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "modern",
+      heatingType: "fjarrvarme"
+    });
+
+    const retrofit = calculateClimateImpact({
+      buildingType: "kontor",
+      grossFloorAreaM2: 3000,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "modern",
+      heatingType: "fjarrvarme",
+      interventionType: "ombyggnad",
+      existingBuilding: {
+        grossFloorAreaM2: 3000,
+        buildYear: 1985,
+        frameMaterial: "betong",
+        energyStandard: "aldre",
+        specificEnergyUseKwhM2Year: 180
+      },
+      retrofitDepth: "medium",
+      retainedStructureSharePct: 80
+    });
+
+    expect(retrofit.embodied.totalKgCo2e).toBeLessThan(newBuild.embodied.totalKgCo2e);
+    expect(retrofit.baselineComparison?.annualOperationalDeltaKgCo2e).toBeLessThan(0);
+  });
+});

@@ -1,0 +1,17 @@
+{
+  "embodiedMultiplierByDepth": {
+    "light": 0.18,
+    "medium": 0.32,
+    "deep": 0.52
+  },
+  "operationalImprovementPctByDepth": {
+    "light": 0.12,
+    "medium": 0.28,
+    "deep": 0.45
+  },
+  "retainedStructureFloorPct": 0.15,
+  "ombyggnadFoundationReuseFactor": 0.2,
+  "pabyggnadFoundationFactor": 0.15,
+  "pabyggnadReinforcementKgCo2ePerAddedM2": 65,
+  "avoidedNewbuildCreditShare": 0.3
+}

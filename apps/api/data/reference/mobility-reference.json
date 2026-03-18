@@ -1,0 +1,180 @@
+{
+  "accessibilityBands": {
+    "high": {
+      "maxTransitStopM": 400,
+      "maxRailStationM": 900,
+      "minDeparturesPerHour": 10
+    },
+    "medium": {
+      "maxTransitStopM": 700,
+      "maxRailStationM": 1800,
+      "minDeparturesPerHour": 4
+    },
+    "low": {
+      "maxTransitStopM": 1500,
+      "maxRailStationM": 5000,
+      "minDeparturesPerHour": 0
+    }
+  },
+  "transitNodes": [
+    {
+      "id": "tcentralen",
+      "name": "T-Centralen",
+      "type": "rail",
+      "lat": 59.3307,
+      "lon": 18.0586,
+      "departuresPerHour": 36
+    },
+    {
+      "id": "odenplan",
+      "name": "Odenplan",
+      "type": "rail",
+      "lat": 59.343,
+      "lon": 18.0491,
+      "departuresPerHour": 20
+    },
+    {
+      "id": "fridhemsplan",
+      "name": "Fridhemsplan",
+      "type": "transit",
+      "lat": 59.3332,
+      "lon": 18.0329,
+      "departuresPerHour": 18
+    },
+    {
+      "id": "alvik",
+      "name": "Alvik",
+      "type": "rail",
+      "lat": 59.3335,
+      "lon": 17.9802,
+      "departuresPerHour": 16
+    },
+    {
+      "id": "liljeholmen",
+      "name": "Liljeholmen",
+      "type": "rail",
+      "lat": 59.3108,
+      "lon": 18.0223,
+      "departuresPerHour": 18
+    },
+    {
+      "id": "globen",
+      "name": "Globen",
+      "type": "rail",
+      "lat": 59.2936,
+      "lon": 18.0835,
+      "departuresPerHour": 12
+    },
+    {
+      "id": "hammarby-sjostad",
+      "name": "Hammarby Sjostad tvärbana",
+      "type": "transit",
+      "lat": 59.3054,
+      "lon": 18.1025,
+      "departuresPerHour": 8
+    },
+    {
+      "id": "arstaberg",
+      "name": "Årstaberg",
+      "type": "rail",
+      "lat": 59.2993,
+      "lon": 18.0264,
+      "departuresPerHour": 14
+    }
+  ],
+  "annualTripsPerPersonByUse": {
+    "residential": 520,
+    "workplace": 420,
+    "education": 360,
+    "retail": 280
+  },
+  "avgTripLengthKmByMode": {
+    "transit": 9.5,
+    "car": 10.8,
+    "walkCycle": 2.8,
+    "serviceTrips": 7.2
+  },
+  "emissionFactorsKgCo2ePerPkm": {
+    "transit": 0.045,
+    "car": 0.16,
+    "walkCycle": 0.005,
+    "serviceTrips": 0.11
+  },
+  "modeShareProfiles": {
+    "residential": {
+      "high": {
+        "transit": 0.42,
+        "car": 0.23,
+        "walkCycle": 0.35
+      },
+      "medium": {
+        "transit": 0.32,
+        "car": 0.38,
+        "walkCycle": 0.3
+      },
+      "low": {
+        "transit": 0.18,
+        "car": 0.58,
+        "walkCycle": 0.24
+      }
+    },
+    "workplace": {
+      "high": {
+        "transit": 0.5,
+        "car": 0.22,
+        "walkCycle": 0.28
+      },
+      "medium": {
+        "transit": 0.37,
+        "car": 0.39,
+        "walkCycle": 0.24
+      },
+      "low": {
+        "transit": 0.2,
+        "car": 0.62,
+        "walkCycle": 0.18
+      }
+    },
+    "education": {
+      "high": {
+        "transit": 0.38,
+        "car": 0.18,
+        "walkCycle": 0.44
+      },
+      "medium": {
+        "transit": 0.29,
+        "car": 0.31,
+        "walkCycle": 0.4
+      },
+      "low": {
+        "transit": 0.14,
+        "car": 0.5,
+        "walkCycle": 0.36
+      }
+    },
+    "retail": {
+      "high": {
+        "transit": 0.35,
+        "car": 0.32,
+        "walkCycle": 0.33
+      },
+      "medium": {
+        "transit": 0.24,
+        "car": 0.48,
+        "walkCycle": 0.28
+      },
+      "low": {
+        "transit": 0.12,
+        "car": 0.68,
+        "walkCycle": 0.2
+      }
+    }
+  },
+  "serviceTripShareByUse": {
+    "residential": 0.06,
+    "workplace": 0.08,
+    "education": 0.04,
+    "retail": 0.09
+  },
+  "parkingCarShareAdjustmentPerSpacePerPerson": 0.015
+}

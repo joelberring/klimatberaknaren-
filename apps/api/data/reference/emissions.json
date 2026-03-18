@@ -1,0 +1,63 @@
+{
+  "materialFactorsKgCo2ePerM3": {
+    "tra": 110,
+    "betong": 340,
+    "stal": 1800,
+    "hybrid": 720
+  },
+  "heatingProfiles": {
+    "fjarrvarme": {
+      "heatingSharePct": 82,
+      "heatingFactorKgCo2ePerKwh": 0.065,
+      "electricityFactorKgCo2ePerKwh": 0.04
+    },
+    "varmepump": {
+      "heatingSharePct": 70,
+      "heatingFactorKgCo2ePerKwh": 0.04,
+      "electricityFactorKgCo2ePerKwh": 0.04
+    },
+    "el": {
+      "heatingSharePct": 100,
+      "heatingFactorKgCo2ePerKwh": 0.04,
+      "electricityFactorKgCo2ePerKwh": 0.04
+    },
+    "biobransle": {
+      "heatingSharePct": 78,
+      "heatingFactorKgCo2ePerKwh": 0.018,
+      "electricityFactorKgCo2ePerKwh": 0.04
+    }
+  },
+  "baselineUValues": {
+    "yttervagg": 0.35,
+    "tak": 0.22,
+    "fonster": 1.4
+  },
+  "defaultFloors": {
+    "smahus": 2,
+    "flerbostadshus": 5,
+    "kontor": 6,
+    "skola": 2,
+    "handel": 1
+  },
+  "defaultGlazingRatioPct": {
+    "smahus": 18,
+    "flerbostadshus": 22,
+    "kontor": 42,
+    "skola": 28,
+    "handel": 35
+  },
+  "foundationMultipliers": {
+    "platta_pa_mark": 1,
+    "kantbalk": 0.92,
+    "kallare": 1.18,
+    "palar": 1.28
+  },
+  "landUseFactorsKgCo2ePerM2": {
+    "tidigare_bebyggd": 2,
+    "hardgjord": 4,
+    "gronyta": 10,
+    "skog": 18,
+    "jordbruksmark": 12
+  },
+  "parkingKgCo2ePerSpace": 18000
+}
