@@ -14,9 +14,5 @@
     "dev:api": "npm run dev -w @klimat/api",
     "dev:web": "npm run dev -w @klimat/web",
     "smoke:vercel": "node scripts/smoke-vercel.mjs"
-  },
-  "dependencies": {
-    "@types/pg": "^8.18.0",
-    "pg": "^8.20.0"
   }
 }

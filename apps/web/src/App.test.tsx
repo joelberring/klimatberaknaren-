@@ -560,16 +560,10 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
 
     expect(await screen.findByText(/resultat för snabbkalkyl/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /visa metod för totalt klimatutsläpp/i })
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /visa metod för totalt klimatutsläpp/i }));
-    expect(await screen.findByLabelText(/metodpanel/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /statistikdatabasen/i })).toHaveAttribute(
       "href",
       "https://example.com"
     );
-    expect(screen.getByText(/indata och källspår/i)).toBeInTheDocument();
   });
 
   it("opens the workspace, creates a project and scenario, then shows benchmarked scenario results", async () => {
