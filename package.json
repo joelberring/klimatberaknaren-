@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build -w @klimat/shared && npm run build -w @klimat/api && npm run build -w @klimat/web",
+    "build:vercel": "npm run build -w @klimat/shared && npm run build -w @klimat/web && rm -rf dist && cp -R apps/web/dist dist",
     "test": "npm run test -w @klimat/shared && npm run test -w @klimat/api && npm run test -w @klimat/web",
     "typecheck": "npm run typecheck -w @klimat/shared && npm run typecheck -w @klimat/api && npm run typecheck -w @klimat/web",
     "dev:api": "npm run dev -w @klimat/api",
