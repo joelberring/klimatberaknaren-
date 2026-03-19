@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 import { ZodError } from "zod";
 
+import type { BuildingModel3D, GeoJsonGeometry } from "../../../packages/shared/src";
 import { getBoverketAdapterStatus } from "./adapters/boverket";
 import { calculateSchema } from "./schemas/calculateSchema";
 import {
@@ -232,7 +233,11 @@ export async function handleScenarioGeoJsonImportRequest(
   response: express.Response
 ) {
   const payload = geoJsonImportSchema.parse(request.body);
-  const { planObjects, warnings } = importGeoJsonFeatures(payload.geojson.features);
+  const features = payload.geojson.features as Array<{
+    properties: Record<string, unknown>;
+    geometry: GeoJsonGeometry | null;
+  }>;
+  const { planObjects, warnings } = importGeoJsonFeatures(features);
   const scenario = await appendScenarioPlanObjects(
     getStringParam(request.params.scenarioId),
     planObjects
@@ -268,9 +273,10 @@ export async function handleScenarioModel3DImportRequest(
   response: express.Response
 ) {
   const payload = model3dImportSchema.parse(request.body);
-  const model = {
+  const model: BuildingModel3D = {
     ...payload.model,
-    importedAt: payload.model.importedAt ?? new Date().toISOString()
+    importedAt: payload.model.importedAt ?? new Date().toISOString(),
+    footprint: payload.model.footprint ? (payload.model.footprint as GeoJsonGeometry) : undefined
   };
   const scenario = await saveScenarioModel3D(getStringParam(request.params.scenarioId), model);
 

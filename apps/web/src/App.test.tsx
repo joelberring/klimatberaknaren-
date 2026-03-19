@@ -828,7 +828,10 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
-    await userEvent.click(screen.getByRole("button", { name: /ny stadsdel 2040/i }));
+    const createdProjectLabel = await screen.findByText(/^ny stadsdel 2040$/i, {
+      selector: "strong"
+    });
+    await userEvent.click(createdProjectLabel.closest("button") ?? createdProjectLabel);
     await userEvent.type(screen.getByPlaceholderText(/tät struktur a/i), "Tabellscenario");
     await userEvent.click(screen.getByRole("button", { name: /skapa scenario/i }));
 
