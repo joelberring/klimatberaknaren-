@@ -48,6 +48,14 @@ const project = (
   })
 ).body;
 
+const workspaceAfterProject = (
+  await requestJson("/api/workspace", { headers: authHeaders })
+).body;
+
+if (!workspaceAfterProject.projects?.some((entry) => entry.id === project.id)) {
+  throw new Error("Created project did not persist to workspace.");
+}
+
 const scenario = (
   await requestJson(`/api/projects/${project.id}/scenarios`, {
     method: "POST",
@@ -90,14 +98,64 @@ const calculation = (
   })
 ).body;
 
+const importResponse = (
+  await requestJson(`/api/scenarios/${scenario.id}/imports/tabular`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders
+    },
+    body: JSON.stringify({
+      format: "json",
+      rows: [
+        {
+          id: "smoke-building-1",
+          name: "Smoke byggnad 1",
+          buildingType: "kontor",
+          grossFloorAreaM2: 1000,
+          buildYear: 2030,
+          frameMaterial: "betong",
+          energyStandard: "normal",
+          heatingType: "fjarrvarme"
+        }
+      ]
+    })
+  })
+).body;
+
+const deletedScenario = (
+  await requestJson(`/api/projects/${project.id}/scenarios/${scenario.id}`, {
+    method: "DELETE",
+    headers: authHeaders
+  })
+).body;
+
+const deletedProject = (
+  await requestJson(`/api/projects/${project.id}`, {
+    method: "DELETE",
+    headers: authHeaders
+  })
+).body;
+
+const workspaceAfterCleanup = (await requestJson("/api/workspace", { headers: authHeaders })).body;
+
+if (workspaceAfterCleanup.projects?.some((entry) => entry.id === project.id)) {
+  throw new Error("Project still exists after cleanup.");
+}
+
 console.log(
   JSON.stringify(
     {
       health,
       login: loginResponse.body,
       workspaceSession: workspace.session,
+      workspaceAfterProject: workspaceAfterProject.projects?.length ?? null,
       project: project.id,
       scenario: scenario.id,
+      importResponse: importResponse.importedCount,
+      deletedScenario: deletedScenario.id,
+      deletedProject: deletedProject.id,
+      workspaceAfterCleanup: workspaceAfterCleanup.projects?.length ?? null,
       totals: calculation.totals,
       runCount: calculation.scenario.runs?.length ?? 0,
       persistence: health.persistence

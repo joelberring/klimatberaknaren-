@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   handleApiError,
   handleCalculateRequest,
-  handleDataSourcesRequest
+  handleDataSourcesRequest,
+  handleProjectCreateRequest,
+  handleScenarioCreateRequest
 } from "../src/app";
 
 describe("api routes", () => {
@@ -93,5 +95,47 @@ describe("api routes", () => {
 
     expect(response.statusCode).toBe(400);
     expect((response.body as { message: string }).message).toBe("Ogiltig indata");
+  });
+
+  it("creates a scenario immediately after creating a project through the API handlers", async () => {
+    const projectResponse = createMockResponse();
+    await handleProjectCreateRequest(
+      {
+        body: {
+          organizationId: "stockholm-stad",
+          name: "Kedjeprojekt"
+        }
+      } as Request,
+      projectResponse
+    );
+
+    expect(projectResponse.statusCode).toBe(201);
+    expect((projectResponse.body as { id: string }).id).toBeTruthy();
+
+    const scenarioResponse = createMockResponse();
+    await handleScenarioCreateRequest(
+      {
+        params: { projectId: (projectResponse.body as { id: string }).id },
+        body: {
+          name: "Kedjescenario",
+          mode: "quick",
+          quickInput: {
+            buildingType: "kontor",
+            grossFloorAreaM2: 1000,
+            buildYear: 2030,
+            frameMaterial: "betong",
+            energyStandard: "normal",
+            heatingType: "fjarrvarme"
+          }
+        }
+      } as unknown as Request,
+      scenarioResponse
+    );
+
+    expect(scenarioResponse.statusCode).toBe(201);
+    expect((scenarioResponse.body as { projectId: string }).projectId).toBe(
+      (projectResponse.body as { id: string }).id
+    );
+    expect((scenarioResponse.body as { name: string }).name).toBe("Kedjescenario");
   });
 });

@@ -34,7 +34,8 @@ async function parseJson<T>(response: Response, requestLabel: string): Promise<T
       typeof errorBody?.message === "string" && errorBody.message.trim().length
         ? errorBody.message
         : "Ett fel uppstod vid API-anropet";
-    throw new Error(`${requestLabel} (${status}): ${message}`);
+    const kind = typeof errorBody?.kind === "string" && errorBody.kind.trim().length ? ` [${errorBody.kind}]` : "";
+    throw new Error(`${requestLabel} (${status}): ${message}${kind}`);
   }
 
   return response.json() as Promise<T>;

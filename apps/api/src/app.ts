@@ -90,6 +90,22 @@ function ensurePilotSessionId(request: express.Request, response: express.Respon
   return sessionId;
 }
 
+function logWorkspaceMutation(
+  action: string,
+  details: Record<string, string | number | boolean | null | undefined>
+) {
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
+  console.info(
+    `[api:${action}] ${JSON.stringify({
+      ...details,
+      persistence: getPersistenceInfo().mode
+    })}`
+  );
+}
+
 export function handleHealthRequest(_request: express.Request, response: express.Response) {
   response.json({
     ok: true,
@@ -148,7 +164,12 @@ export async function handleProjectCreateRequest(
   response: express.Response
 ) {
   const payload = projectSchema.parse(request.body);
-  response.status(201).json(await createProject(payload));
+  const project = await createProject(payload);
+  logWorkspaceMutation("project:create", {
+    organizationId: payload.organizationId,
+    projectId: project.id
+  });
+  response.status(201).json(project);
 }
 
 export async function handleProjectDeleteRequest(
@@ -156,6 +177,10 @@ export async function handleProjectDeleteRequest(
   response: express.Response
 ) {
   const project = await deleteProject(getStringParam(request.params.projectId));
+  logWorkspaceMutation("project:delete", {
+    projectId: project.id,
+    organizationId: project.organizationId
+  });
   response.json(project);
 }
 
@@ -177,19 +202,30 @@ export async function handleScenarioCreateRequest(
   response: express.Response
 ) {
   const payload = scenarioSchema.parse(request.body);
-  response
-    .status(201)
-    .json(await createScenario(getStringParam(request.params.projectId), payload));
+  const projectId = getStringParam(request.params.projectId);
+  const scenario = await createScenario(projectId, payload);
+  const project = await getProject(projectId);
+  logWorkspaceMutation("scenario:create", {
+    projectId,
+    scenarioId: scenario.id,
+    organizationId: project?.organizationId ?? null
+  });
+  response.status(201).json(scenario);
 }
 
 export async function handleScenarioDeleteRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const removedScenario = await deleteScenario(
-    getStringParam(request.params.projectId),
-    getStringParam(request.params.scenarioId)
-  );
+  const projectId = getStringParam(request.params.projectId);
+  const scenarioId = getStringParam(request.params.scenarioId);
+  const removedScenario = await deleteScenario(projectId, scenarioId);
+  const project = await getProject(projectId);
+  logWorkspaceMutation("scenario:delete", {
+    projectId,
+    scenarioId,
+    organizationId: project?.organizationId ?? null
+  });
   response.json(removedScenario);
 }
 
@@ -198,12 +234,14 @@ export async function handleScenarioDuplicateRequest(
   response: express.Response
 ) {
   const payload = duplicateScenarioSchema.parse(request.body);
+  const projectId = getStringParam(request.params.projectId);
+  const scenarioId = getStringParam(request.params.scenarioId);
   response
     .status(201)
     .json(
       await duplicateScenario(
-        getStringParam(request.params.projectId),
-        getStringParam(request.params.scenarioId),
+        projectId,
+        scenarioId,
         payload.name
       )
     );
@@ -214,7 +252,8 @@ export async function handleScenarioCalculateRequest(
   response: express.Response
 ) {
   const payload = scenarioCalculationSchema.parse(request.body);
-  const match = await getScenario(getStringParam(request.params.scenarioId));
+  const scenarioId = getStringParam(request.params.scenarioId);
+  const match = await getScenario(scenarioId);
 
   if (!match) {
     throw new Error("Scenariot hittades inte");
@@ -229,6 +268,11 @@ export async function handleScenarioCalculateRequest(
   const targetProfile = getTargetProfile(match.project.organizationId);
   const result = calculateScenarioResult(match.scenario, benchmarkProfile, targetProfile);
   const scenario = await saveScenarioResult(match.scenario.id, result, payload.quickInput);
+  logWorkspaceMutation("scenario:calculate", {
+    projectId: match.project.id,
+    scenarioId,
+    organizationId: match.project.organizationId
+  });
 
   response.json({
     scenario,
@@ -254,15 +298,23 @@ export async function handleScenarioGeoJsonImportRequest(
   response: express.Response
 ) {
   const payload = geoJsonImportSchema.parse(request.body);
+  const scenarioId = getStringParam(request.params.scenarioId);
   const features = payload.geojson.features as Array<{
     properties: Record<string, unknown>;
     geometry: GeoJsonGeometry | null;
   }>;
   const { planObjects, warnings } = importGeoJsonFeatures(features);
   const scenario = await appendScenarioPlanObjects(
-    getStringParam(request.params.scenarioId),
+    scenarioId,
     planObjects
   );
+  const match = await getScenario(scenarioId);
+  logWorkspaceMutation("scenario:import:geojson", {
+    projectId: match?.project.id ?? null,
+    scenarioId,
+    organizationId: match?.project.organizationId ?? null,
+    importedCount: planObjects.length
+  });
 
   response.status(201).json({
     importedCount: planObjects.length,
@@ -276,11 +328,16 @@ export async function handleScenarioTabularImportRequest(
   response: express.Response
 ) {
   const payload = tabularImportSchema.parse(request.body);
+  const scenarioId = getStringParam(request.params.scenarioId);
   const { planObjects, warnings } = importTabularRows(payload);
-  const scenario = await appendScenarioPlanObjects(
-    getStringParam(request.params.scenarioId),
-    planObjects
-  );
+  const scenario = await appendScenarioPlanObjects(scenarioId, planObjects);
+  const match = await getScenario(scenarioId);
+  logWorkspaceMutation("scenario:import:tabular", {
+    projectId: match?.project.id ?? null,
+    scenarioId,
+    organizationId: match?.project.organizationId ?? null,
+    importedCount: planObjects.length
+  });
 
   response.status(201).json({
     importedCount: planObjects.length,
@@ -294,12 +351,20 @@ export async function handleScenarioModel3DImportRequest(
   response: express.Response
 ) {
   const payload = model3dImportSchema.parse(request.body);
+  const scenarioId = getStringParam(request.params.scenarioId);
   const model: BuildingModel3D = {
     ...payload.model,
     importedAt: payload.model.importedAt ?? new Date().toISOString(),
     footprint: payload.model.footprint ? (payload.model.footprint as GeoJsonGeometry) : undefined
   };
-  const scenario = await saveScenarioModel3D(getStringParam(request.params.scenarioId), model);
+  const scenario = await saveScenarioModel3D(scenarioId, model);
+  const match = await getScenario(scenarioId);
+  logWorkspaceMutation("scenario:import:model3d", {
+    projectId: match?.project.id ?? null,
+    scenarioId,
+    organizationId: match?.project.organizationId ?? null,
+    importedCount: model.parts.length
+  });
 
   response.status(201).json({
     scenario,
@@ -340,6 +405,7 @@ export function handleApiError(
   if (error instanceof ZodError) {
     return response.status(400).json({
       message: "Ogiltig indata",
+      kind: "validation_error",
       issues: error.issues.map((issue) => ({
         path: issue.path.join("."),
         message: issue.message
@@ -349,7 +415,8 @@ export function handleApiError(
 
   if (error.message.includes("hittades inte")) {
     return response.status(404).json({
-      message: error.message
+      message: error.message,
+      kind: "not_found"
     });
   }
 
@@ -359,7 +426,8 @@ export function handleApiError(
     }
 
     return response.status(400).json({
-      message: error.message
+      message: error.message,
+      kind: "request_error"
     });
   }
 
@@ -368,7 +436,8 @@ export function handleApiError(
   }
 
   return response.status(500).json({
-    message: "Ett oväntat fel uppstod"
+    message: "Ett oväntat fel uppstod",
+    kind: "server_error"
   });
 }
 
