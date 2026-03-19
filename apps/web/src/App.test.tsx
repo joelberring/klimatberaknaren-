@@ -19,8 +19,17 @@ interface TestScenario {
   name: string;
   mode: string;
   planObjects: unknown[];
+  runs: Array<{
+    id: string;
+    scenarioId: string;
+    createdAt: string;
+    result: ReturnType<typeof createResult>;
+    inputSnapshot?: Record<string, unknown>;
+  }>;
   createdAt: string;
   updatedAt: string;
+  lastCalculatedAt?: string;
+  quickInput?: Record<string, unknown>;
   latestResult?: ReturnType<typeof createResult>;
 }
 
@@ -71,10 +80,10 @@ function createResult(overrides: Record<string, unknown> = {}) {
         }
       ]
     },
-    mobility: {
-      annualKgCo2e: 3200,
-      lifetimeKgCo2e: 160000,
-      breakdown: [
+      mobility: {
+        annualKgCo2e: 3200,
+        lifetimeKgCo2e: 160000,
+        breakdown: [
         {
           key: "car",
           label: "Bilresor",
@@ -82,13 +91,14 @@ function createResult(overrides: Record<string, unknown> = {}) {
           unit: "kgCO2e",
           traceKey: "mobility.car"
         }
-      ],
-      inputs: {
-        accessibilityBand: "medium",
-        distanceToTransitStopM: 350,
-        distanceToRailStationM: 900,
-        departuresPerHour: 10,
-        source: "siteLocation"
+        ],
+        inputs: {
+          accessibilityBand: "medium",
+          urbanContext: "urban",
+          distanceToTransitStopM: 350,
+          distanceToRailStationM: 900,
+          departuresPerHour: 10,
+          source: "siteLocation"
       }
     },
     assumptions: [
@@ -316,6 +326,22 @@ function createResult(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createRun(
+  id: string,
+  scenarioId: string,
+  result: ReturnType<typeof createResult>,
+  createdAt: string,
+  inputSnapshot?: Record<string, unknown>
+) {
+  return {
+    id,
+    scenarioId,
+    createdAt,
+    result,
+    inputSnapshot
+  };
+}
+
 describe("App", () => {
   beforeEach(() => {
     workspacePayload = {
@@ -334,6 +360,10 @@ describe("App", () => {
           id: "benchmark-stockholm-2026",
           organizationId: "stockholm-stad",
           name: "Stockholm kommunprofil 2026",
+          sourceLabel: "Kommunal pilotprofil",
+          version: "2026.1",
+          updatedAt: "2026-03-01",
+          applicability: "Tidiga kommunala jämförelser för Stockholm",
           normalPerM2KgCo2e: 680,
           targetPerM2KgCo2e: 520,
           normalPerPersonKgCo2e: 25500,
@@ -346,6 +376,10 @@ describe("App", () => {
           id: "benchmark-uppsala-2026",
           organizationId: "uppsala-kommun",
           name: "Uppsala kommunprofil 2026",
+          sourceLabel: "Kommunal pilotprofil",
+          version: "2026.1",
+          updatedAt: "2026-03-01",
+          applicability: "Tidiga kommunala jämförelser för Uppsala",
           normalPerM2KgCo2e: 650,
           targetPerM2KgCo2e: 500,
           normalPerPersonKgCo2e: 24000,
@@ -370,6 +404,13 @@ describe("App", () => {
             datasets: [
               {
                 dataset: "energy-benchmarks",
+                version: "2026.03",
+                updatedAt: "2026-03-18",
+                sourceIds: ["scb-statistikdatabasen"],
+                status: "active"
+              },
+              {
+                dataset: "standard-profiles",
                 version: "2026.03",
                 updatedAt: "2026-03-18",
                 sourceIds: ["scb-statistikdatabasen"],
@@ -484,12 +525,14 @@ describe("App", () => {
       }
 
       if (url === "/api/projects/project-1/scenarios" && method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
         const scenario: TestScenario = {
           id: "scenario-1",
           projectId: "project-1",
-          name: "Täthet A",
+          name: String(body.name ?? "Täthet A"),
           mode: "quick",
           planObjects: [],
+          runs: [],
           createdAt: "2026-03-18T00:00:00.000Z",
           updatedAt: "2026-03-18T00:00:00.000Z"
         };
@@ -508,13 +551,46 @@ describe("App", () => {
       }
 
       if (url === "/api/scenarios/scenario-1/calculate" && method === "POST") {
-        const result = createResult();
         const project = workspacePayload.projects[0];
         const currentScenario = project?.scenarios[0];
+        const runIndex = (currentScenario?.runs?.length ?? 0) + 1;
+        const result =
+          runIndex === 1
+            ? createResult()
+            : createResult({
+                totals: {
+                  label: "Totalt klimatutsläpp",
+                  value: 470000,
+                  unit: "kg CO2e",
+                  traceKey: "totals"
+                },
+                perM2: {
+                  label: "Klimatutsläpp per m2",
+                  value: 470,
+                  unit: "kg CO2e/m2",
+                  traceKey: "perM2"
+                }
+              });
+        const run = createRun(
+          `run-${runIndex}`,
+          "scenario-1",
+          result,
+          runIndex === 1 ? "2026-03-18T09:00:00.000Z" : "2026-03-18T10:00:00.000Z",
+          {
+            buildingType: "kontor",
+            grossFloorAreaM2: 1200,
+            buildYear: 2030,
+            frameMaterial: "betong",
+            energyStandard: "normal",
+            heatingType: "fjarrvarme"
+          }
+        );
 
         const scenario = {
           ...currentScenario,
-          latestResult: result
+          latestResult: result,
+          runs: [...(currentScenario?.runs ?? []), run],
+          lastCalculatedAt: run.createdAt
         };
         workspacePayload = {
           ...workspacePayload,
@@ -529,6 +605,119 @@ describe("App", () => {
         return new Response(JSON.stringify({ scenario, result }));
       }
 
+      if (url === "/api/scenarios/scenario-1/imports/tabular" && method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const rows = Array.isArray(body.rows) ? body.rows : [];
+        const importedPlanObjects = rows.map((row: Record<string, unknown>, index: number) => ({
+          id: String(row.id ?? `import-${index + 1}`),
+          name: String(row.name ?? `Byggnad ${index + 1}`),
+          objectType: (row.objectType ?? "byggnad") as string,
+          grossFloorAreaM2: Number(row.grossFloorAreaM2 ?? 0),
+          quickInput: {
+            buildingType: row.buildingType ?? "flerbostadshus",
+            grossFloorAreaM2: Number(row.grossFloorAreaM2 ?? 0),
+            buildYear: Number(row.buildYear ?? 2032),
+            frameMaterial: row.frameMaterial ?? "betong",
+            energyStandard: row.energyStandard ?? "normal",
+            heatingType: row.heatingType ?? "fjarrvarme",
+            buildingForm: row.buildingForm ?? "normal",
+            urbanContext: row.urbanContext ?? "urban",
+            siteAreaM2: row.siteAreaM2 !== undefined ? Number(row.siteAreaM2) : undefined,
+            floorsAboveGround:
+              row.floorsAboveGround !== undefined ? Number(row.floorsAboveGround) : undefined,
+            buildingFootprintM2:
+              row.buildingFootprintM2 !== undefined ? Number(row.buildingFootprintM2) : undefined,
+            glazingRatioPct:
+              row.glazingRatioPct !== undefined ? Number(row.glazingRatioPct) : undefined,
+            parkingSpaces:
+              row.parkingSpaces !== undefined ? Number(row.parkingSpaces) : undefined,
+            parkingStructureType: row.parkingStructureType ?? "none",
+            parkingGarageFloors:
+              row.parkingGarageFloors !== undefined ? Number(row.parkingGarageFloors) : undefined,
+            landType: row.landType,
+            groundCondition: row.groundCondition ?? "normal_mark",
+            foundationType: row.foundationType,
+            siteLocation:
+              row.lat !== undefined && row.lon !== undefined
+                ? { lat: Number(row.lat), lon: Number(row.lon) }
+                : undefined,
+            transitOverrides:
+              row.distanceToTransitStopM !== undefined ||
+              row.distanceToRailStationM !== undefined ||
+              row.departuresPerHour !== undefined
+                ? {
+                    distanceToTransitStopM:
+                      row.distanceToTransitStopM !== undefined
+                        ? Number(row.distanceToTransitStopM)
+                        : undefined,
+                    distanceToRailStationM:
+                      row.distanceToRailStationM !== undefined
+                        ? Number(row.distanceToRailStationM)
+                        : undefined,
+                    departuresPerHour:
+                      row.departuresPerHour !== undefined ? Number(row.departuresPerHour) : undefined
+                  }
+                : undefined,
+            interventionType: row.interventionType,
+            existingBuilding:
+              row.existingGrossFloorAreaM2 !== undefined &&
+              row.existingBuildYear !== undefined &&
+              row.existingFrameMaterial !== undefined &&
+              row.existingEnergyStandard !== undefined
+                ? {
+                    grossFloorAreaM2: Number(row.existingGrossFloorAreaM2),
+                    buildYear: Number(row.existingBuildYear),
+                    frameMaterial: row.existingFrameMaterial,
+                    energyStandard: row.existingEnergyStandard,
+                    specificEnergyUseKwhM2Year:
+                      row.existingSpecificEnergyUseKwhM2Year !== undefined
+                        ? Number(row.existingSpecificEnergyUseKwhM2Year)
+                        : undefined
+                  }
+                : undefined,
+            retainedStructureSharePct:
+              row.retainedStructureSharePct !== undefined
+                ? Number(row.retainedStructureSharePct)
+                : undefined,
+            addedGrossFloorAreaM2:
+              row.addedGrossFloorAreaM2 !== undefined ? Number(row.addedGrossFloorAreaM2) : undefined,
+            addedFloors: row.addedFloors !== undefined ? Number(row.addedFloors) : undefined,
+            retrofitDepth: row.retrofitDepth
+          }
+        }));
+
+        const project = workspacePayload.projects[0];
+        const currentScenario = project?.scenarios[0];
+        const scenario = currentScenario
+          ? {
+              ...currentScenario,
+              mode: "plan",
+              planObjects: [...currentScenario.planObjects, ...importedPlanObjects],
+              updatedAt: "2026-03-18T10:30:00.000Z"
+            }
+          : currentScenario;
+
+        if (project && scenario) {
+          workspacePayload = {
+            ...workspacePayload,
+            projects: [
+              {
+                ...project,
+                scenarios: [scenario]
+              }
+            ]
+          };
+        }
+
+        return new Response(
+          JSON.stringify({
+            importedCount: importedPlanObjects.length,
+            scenario,
+            warnings: []
+          })
+        );
+      }
+
       return new Response(JSON.stringify({ message: `Unhandled ${method} ${url}` }), {
         status: 500
       });
@@ -540,6 +729,7 @@ describe("App", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    window.history.pushState({}, "", "/");
   });
 
   it("shows validation error when required numeric fields are missing in quick mode", async () => {
@@ -590,10 +780,36 @@ describe("App", () => {
     await userEvent.type(areaInputs[0], "1200");
     await userEvent.type(yearInputs[0], "2030");
     await userEvent.click(screen.getByRole("button", { name: /beräkna scenario/i }));
+    await userEvent.click(screen.getByRole("button", { name: /beräkna scenario/i }));
 
     expect(await screen.findByText(/kommunalt scenarioresultat/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/normalvärde/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/benchmarkstatus och referenser/i)).toBeInTheDocument();
+    expect(screen.getByText(/jämför två sparade körningar/i)).toBeInTheDocument();
+    expect(screen.getByText(/trend och fördelning/i)).toBeInTheDocument();
+    expect(screen.getByText(/geojson \+ glb\/gltf med klickbar klimat-attribution/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/normal/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/minska stommens klimatavtryck/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /visa analys/i }));
+    expect(await screen.findByText(/separat analysvy/i)).toBeInTheDocument();
+  });
+
+  it("lets the user draft and import multiple buildings from the table editor", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
+    await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
+    await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
+    await userEvent.type(screen.getByPlaceholderText(/tät struktur a/i), "Tabellscenario");
+    await userEvent.click(screen.getByRole("button", { name: /skapa scenario/i }));
+
+    await screen.findByText(/flera byggnader i samma scenario/i);
+    await userEvent.click(screen.getByRole("button", { name: /duplicera första/i }));
+    await userEvent.click(screen.getByRole("button", { name: /importera till scenario/i }));
+
+    expect(await screen.findByText("Tabellscenario 1", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText(/kopia/i)).toBeInTheDocument();
+    expect(screen.getByText(/planobjektläge/i)).toBeInTheDocument();
   });
 
   it("renders a multi-scenario comparison board with benchmark toggles", async () => {
@@ -613,8 +829,44 @@ describe("App", () => {
               name: "Variant A",
               mode: "quick",
               planObjects: [],
+              runs: [
+                createRun(
+                  "run-a1",
+                  "scenario-a",
+                  createResult({
+                    totals: {
+                      label: "Totalt klimatutsläpp",
+                      value: 520000,
+                      unit: "kg CO2e",
+                      traceKey: "totals"
+                    },
+                    perM2: {
+                      label: "Klimatutsläpp per m2",
+                      value: 520,
+                      unit: "kg CO2e/m2",
+                      traceKey: "perM2"
+                    }
+                  }),
+                  "2026-03-18T08:00:00.000Z",
+                  {
+                    buildingType: "kontor",
+                    interventionType: "nybyggnad"
+                  }
+                ),
+                createRun(
+                  "run-a2",
+                  "scenario-a",
+                  createResult(),
+                  "2026-03-18T09:00:00.000Z",
+                  {
+                    buildingType: "kontor",
+                    interventionType: "nybyggnad"
+                  }
+                )
+              ],
               createdAt: "2026-03-18T00:00:00.000Z",
               updatedAt: "2026-03-18T00:00:00.000Z",
+              lastCalculatedAt: "2026-03-18T09:00:00.000Z",
               latestResult: createResult()
             },
             {
@@ -623,8 +875,34 @@ describe("App", () => {
               name: "Variant B",
               mode: "quick",
               planObjects: [],
+              runs: [
+                createRun(
+                  "run-b1",
+                  "scenario-b",
+                  createResult({
+                    totals: {
+                      label: "Totalt klimatutsläpp",
+                      value: 460000,
+                      unit: "kg CO2e",
+                      traceKey: "totals"
+                    },
+                    perM2: {
+                      label: "Klimatutsläpp per m2",
+                      value: 460,
+                      unit: "kg CO2e/m2",
+                      traceKey: "perM2"
+                    }
+                  }),
+                  "2026-03-18T09:30:00.000Z",
+                  {
+                    buildingType: "kontor",
+                    interventionType: "nybyggnad"
+                  }
+                )
+              ],
               createdAt: "2026-03-18T00:00:00.000Z",
               updatedAt: "2026-03-18T00:00:00.000Z",
+              lastCalculatedAt: "2026-03-18T09:30:00.000Z",
               latestResult: createResult({
                 totals: {
                   label: "Totalt klimatutsläpp",
@@ -653,9 +931,9 @@ describe("App", () => {
     expect(screen.getAllByText(/variant a/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/variant b/i).length).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: /uppsala kommunprofil 2026/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /uppsala kommunprofil 2026/i })[0]);
     await userEvent.click(
-      screen.getByRole("button", { name: /miljöbyggnad nybyggnad 4.1 silver/i })
+      screen.getAllByRole("button", { name: /miljöbyggnad nybyggnad 4.1 silver/i })[0]
     );
 
     expect(screen.getByText(/uppsala kommunprofil 2026 • normalvärde/i)).toBeInTheDocument();

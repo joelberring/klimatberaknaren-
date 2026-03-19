@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import {
   type BenchmarkProfile,
+  type CalculateRequest,
   type CreateProjectRequest,
   type CreateScenarioRequest,
   type CreateSessionRequest,
+  type BuildingModel3D,
   type Organization,
   type PlanObject,
   type Project,
@@ -42,6 +44,10 @@ const benchmarkProfiles: BenchmarkProfile[] = [
     id: "benchmark-stockholm-2026",
     organizationId: "stockholm-stad",
     name: "Stockholm kommunprofil 2026",
+    sourceLabel: "Kommunal pilotprofil baserad på bundlade referensdata",
+    version: "2026.1",
+    updatedAt: "2026-03-01",
+    applicability: "Tidiga kommunala jämförelser för Stockholm",
     normalPerM2KgCo2e: 680,
     targetPerM2KgCo2e: 520,
     normalPerPersonKgCo2e: 25500,
@@ -63,6 +69,10 @@ const benchmarkProfiles: BenchmarkProfile[] = [
     id: "benchmark-uppsala-2026",
     organizationId: "uppsala-kommun",
     name: "Uppsala kommunprofil 2026",
+    sourceLabel: "Kommunal pilotprofil baserad på bundlade referensdata",
+    version: "2026.1",
+    updatedAt: "2026-03-01",
+    applicability: "Tidiga kommunala jämförelser för Uppsala",
     normalPerM2KgCo2e: 650,
     targetPerM2KgCo2e: 500,
     normalPerPersonKgCo2e: 24500,
@@ -102,6 +112,70 @@ function createId(prefix: string) {
   return `${prefix}-${randomUUID()}`;
 }
 
+function normalizeScenario(scenario: Scenario): Scenario {
+  const runs = scenario.runs ?? [];
+
+  if (runs.length > 0) {
+    return {
+      ...scenario,
+      runs
+    };
+  }
+
+  if (!scenario.latestResult) {
+    return {
+      ...scenario,
+      runs: []
+    };
+  }
+
+  return {
+    ...scenario,
+    runs: [
+      {
+        id: `run-legacy-${scenario.id}`,
+        scenarioId: scenario.id,
+        createdAt: scenario.lastCalculatedAt ?? scenario.updatedAt ?? scenario.createdAt,
+        result: scenario.latestResult,
+        inputSnapshot: scenario.quickInput
+      }
+    ]
+  };
+}
+
+async function loadNormalizedProjects() {
+  const projects = await loadProjects();
+  let changed = false;
+
+  const normalizedProjects = projects.map((project) => {
+    let projectChanged = false;
+    const scenarios = project.scenarios.map((scenario) => {
+      const normalizedScenario = normalizeScenario(scenario);
+      if (normalizedScenario !== scenario) {
+        projectChanged = true;
+      }
+
+      return normalizedScenario;
+    });
+
+    if (!projectChanged) {
+      return project;
+    }
+
+    changed = true;
+    return {
+      ...project,
+      scenarios
+    };
+  });
+
+  if (changed) {
+    await saveProjects(normalizedProjects);
+  }
+
+  return normalizedProjects;
+}
+
 function getFilteredProfiles<T extends { organizationId: string }>(
   profiles: T[],
   organizationId?: string
@@ -134,7 +208,7 @@ export function getPersistenceInfo() {
 
 export async function getWorkspace(organizationId?: string, sessionId?: string): Promise<WorkspaceResponse> {
   const [projects, session] = await Promise.all([
-    loadProjects(),
+    loadNormalizedProjects(),
     sessionId ? loadSession(sessionId) : Promise.resolve(null)
   ]);
 
@@ -169,7 +243,7 @@ export async function createSession(payload: CreateSessionRequest, sessionId: st
 }
 
 export async function createProject(payload: CreateProjectRequest) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   const timestamp = new Date().toISOString();
   const project: Project = {
     id: createId("project"),
@@ -187,24 +261,24 @@ export async function createProject(payload: CreateProjectRequest) {
 }
 
 export async function listProjects(organizationId?: string) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   return organizationId
     ? projects.filter((project) => project.organizationId === organizationId)
     : projects;
 }
 
 export async function getProject(projectId: string) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   return projects.find((project) => project.id === projectId) ?? null;
 }
 
 export async function getScenario(scenarioId: string) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   return findScenario(projects, scenarioId);
 }
 
 export async function createScenario(projectId: string, payload: CreateScenarioRequest) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   const project = projects.find((entry) => entry.id === projectId);
 
   if (!project) {
@@ -220,6 +294,7 @@ export async function createScenario(projectId: string, payload: CreateScenarioR
     mode: payload.mode ?? "quick",
     quickInput: payload.quickInput,
     planObjects: [],
+    runs: [],
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -231,7 +306,7 @@ export async function createScenario(projectId: string, payload: CreateScenarioR
 }
 
 export async function duplicateScenario(projectId: string, scenarioId: string, name?: string) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   const project = projects.find((entry) => entry.id === projectId);
   const baseScenario = project?.scenarios.find((scenario) => scenario.id === scenarioId);
 
@@ -240,9 +315,15 @@ export async function duplicateScenario(projectId: string, scenarioId: string, n
   }
 
   const timestamp = new Date().toISOString();
+  const scenarioCloneId = createId("scenario");
   const clone: Scenario = {
     ...structuredClone(baseScenario),
-    id: createId("scenario"),
+    id: scenarioCloneId,
+    runs: baseScenario.runs.map((run) => ({
+      ...structuredClone(run),
+      id: createId("run"),
+      scenarioId: scenarioCloneId
+    })),
     name: name ?? `${baseScenario.name} kopia`,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -258,7 +339,7 @@ export async function updateScenarioQuickInput(
   scenarioId: string,
   quickInput: Scenario["quickInput"]
 ) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   const match = findScenario(projects, scenarioId);
 
   if (!match) {
@@ -272,7 +353,7 @@ export async function updateScenarioQuickInput(
 }
 
 export async function appendScenarioPlanObjects(scenarioId: string, planObjects: PlanObject[]) {
-  const projects = await loadProjects();
+  const projects = await loadNormalizedProjects();
   const match = findScenario(projects, scenarioId);
 
   if (!match) {
@@ -286,17 +367,47 @@ export async function appendScenarioPlanObjects(scenarioId: string, planObjects:
   return match.scenario;
 }
 
-export async function saveScenarioResult(scenarioId: string, result: Scenario["latestResult"]) {
-  const projects = await loadProjects();
+export async function saveScenarioResult(
+  scenarioId: string,
+  result: Scenario["latestResult"],
+  inputSnapshot?: CalculateRequest
+) {
+  const projects = await loadNormalizedProjects();
   const match = findScenario(projects, scenarioId);
 
   if (!match) {
     throw new Error("Scenariot hittades inte");
   }
 
+  const timestamp = new Date().toISOString();
+  if (result) {
+    match.scenario.runs.push({
+      id: createId("run"),
+      scenarioId,
+      createdAt: timestamp,
+      result,
+      inputSnapshot:
+        inputSnapshot ?? (match.scenario.mode === "quick" ? match.scenario.quickInput : undefined)
+    });
+  }
+
   match.scenario.latestResult = result;
-  match.scenario.lastCalculatedAt = new Date().toISOString();
-  match.scenario.updatedAt = match.scenario.lastCalculatedAt;
+  match.scenario.lastCalculatedAt = timestamp;
+  match.scenario.updatedAt = timestamp;
+  await saveProjects(projects);
+  return match.scenario;
+}
+
+export async function saveScenarioModel3D(scenarioId: string, model: BuildingModel3D) {
+  const projects = await loadNormalizedProjects();
+  const match = findScenario(projects, scenarioId);
+
+  if (!match) {
+    throw new Error("Scenariot hittades inte");
+  }
+
+  match.scenario.buildingModel3D = model;
+  match.scenario.updatedAt = new Date().toISOString();
   await saveProjects(projects);
   return match.scenario;
 }

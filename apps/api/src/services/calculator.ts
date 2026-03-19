@@ -373,6 +373,18 @@ function buildRecommendedActions(
     });
   }
 
+  if ((request.parkingStructureType ?? "none") !== "none") {
+    actions.push({
+      id: "garage-volume",
+      title: "Skala ned garagevolymen",
+      description:
+        "Garagevåningar driver ofta upp den inbyggda klimatpåverkan betydligt. Testa färre garagevåningar, annan parkeringslösning eller delad parkering.",
+      expectedImpact: "high",
+      lever: "garage",
+      traceKey: "action.garage-volume"
+    });
+  }
+
   if (request.interventionType === "nybyggnad" && perM2KgCo2e > 550) {
     actions.push({
       id: "area-efficiency",
@@ -588,6 +600,51 @@ function resolveMobilityUse(buildingType: CalculateRequest["buildingType"]) {
   return "workplace";
 }
 
+function resolveUrbanContext(
+  request: CalculateRequest,
+  accessibilityBand: MobilityInputs["accessibilityBand"]
+): NonNullable<CalculateRequest["urbanContext"]> {
+  if (request.urbanContext) {
+    return request.urbanContext;
+  }
+
+  if (accessibilityBand === "high") {
+    return "central";
+  }
+
+  if (accessibilityBand === "medium") {
+    return "urban";
+  }
+
+  return "suburban";
+}
+
+function resolveGroundCondition(
+  request: CalculateRequest
+): NonNullable<CalculateRequest["groundCondition"]> {
+  return request.groundCondition ?? "normal_mark";
+}
+
+function inferFoundationTypeFromGround(
+  groundCondition: NonNullable<CalculateRequest["groundCondition"]>
+): NonNullable<CalculateRequest["foundationType"]> {
+  if (groundCondition === "berg_fastmark") {
+    return "kantbalk";
+  }
+
+  if (groundCondition === "lera_mjuk" || groundCondition === "gyttja_mjuk" || groundCondition === "fyllning_osaker") {
+    return "palar";
+  }
+
+  return "platta_pa_mark";
+}
+
+function resolveParkingStructureType(
+  request: CalculateRequest
+): NonNullable<CalculateRequest["parkingStructureType"]> {
+  return request.parkingStructureType ?? "none";
+}
+
 function resolveMobilityInputs(
   request: CalculateRequest,
   mobilityReference: MobilityReferenceRecord
@@ -609,6 +666,12 @@ function resolveMobilityInputs(
         departures,
         mobilityReference
       ),
+      urbanContext: resolveUrbanContext(request, determineAccessibilityBand(
+        distanceToTransitStopM,
+        distanceToRailStationM,
+        departures,
+        mobilityReference
+      )),
       distanceToTransitStopM,
       distanceToRailStationM,
       departuresPerHour: departures,
@@ -651,6 +714,12 @@ function resolveMobilityInputs(
         departuresPerHour,
         mobilityReference
       ),
+      urbanContext: resolveUrbanContext(request, determineAccessibilityBand(
+        distanceToTransitStopM,
+        distanceToRailStationM,
+        departuresPerHour,
+        mobilityReference
+      )),
       distanceToTransitStopM,
       distanceToRailStationM,
       departuresPerHour,
@@ -660,6 +729,7 @@ function resolveMobilityInputs(
 
   return {
     accessibilityBand: "medium",
+    urbanContext: resolveUrbanContext(request, "medium"),
     source: "default"
   };
 }
@@ -706,9 +776,25 @@ function calculateMobility(
   const people = population.totalPeople;
   const parkingIntensity =
     people > 0 ? (request.parkingSpaces ?? 0) / Math.max(1, people) : 0;
+  const centralityShift =
+    inputs.urbanContext === "central"
+      ? -0.08
+      : inputs.urbanContext === "urban"
+        ? -0.03
+        : inputs.urbanContext === "suburban"
+          ? 0.04
+          : 0.08;
+  const accessibilityShift =
+    inputs.accessibilityBand === "high"
+      ? -0.04
+      : inputs.accessibilityBand === "medium"
+        ? 0
+        : 0.05;
   const carShift = Math.min(
     0.12,
-    parkingIntensity * mobilityReference.parkingCarShareAdjustmentPerSpacePerPerson
+    parkingIntensity * mobilityReference.parkingCarShareAdjustmentPerSpacePerPerson +
+      centralityShift +
+      accessibilityShift
   );
   const adjustedCar = clamp(baseProfile.car + carShift, 0, 0.92);
   const transferable = baseProfile.transit + baseProfile.walkCycle;
@@ -766,7 +852,7 @@ function calculateMobility(
       label: "Bilresor",
       valueKgCo2e: round(annualCarKg),
       unit: "kgCO2e",
-      note: `${Math.round(normalizedProfile.car * 100)} % av resprofilen`,
+      note: `${Math.round(normalizedProfile.car * 100)} % av resprofilen • ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()}t läge`,
       traceKey: "mobility.car"
     },
     {
@@ -790,6 +876,9 @@ function calculateMobility(
   const defaultsApplied = [
     inputs.source === "default"
       ? "Mobilitetsprofil defaultades till medium tillgänglighet eftersom koordinat eller transitavstånd saknas."
+      : null,
+    request.urbanContext === undefined
+      ? `Lägesprofil defaultades till ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} utifrån tillgänglighetsband.`
       : null
   ].filter((value): value is string => Boolean(value));
 
@@ -798,7 +887,7 @@ function calculateMobility(
       "explanation-mobility-total",
       "mobility.total",
       "Mobilitetslivscykel",
-      "Mobiliteten använder en försiktig resvaneproxy baserad på kollektivtrafiktillgänglighet, byggnadstyp, personunderlag och parkeringstal.",
+      "Mobiliteten använder en försiktig resvaneproxy baserad på kollektivtrafiktillgänglighet, lägesprofil, byggnadstyp, personunderlag och parkeringstal.",
       "personunderlag x resprofil x reseavstand x utslappsfaktorer",
       [
         `${people} personer x ${annualTripsPerPerson} resor/person,år i profilen ${inputs.accessibilityBand}`,
@@ -811,6 +900,12 @@ function calculateMobility(
           label: "Tillgänglighetsband",
           value: inputs.accessibilityBand,
           source: inputs.source === "default" ? "default" : "derived"
+        },
+        {
+          key: "urbanContext",
+          label: "Lägesprofil",
+          value: LABELS.urbanContext[inputs.urbanContext],
+          source: request.urbanContext !== undefined ? "user" : "derived"
         },
         {
           key: "population",
@@ -829,11 +924,13 @@ function calculateMobility(
       resolver.evidenceFor([
         "method-mobility-accessibility",
         "method-mobility-gtfs",
-        "method-mobility-stockholm"
+        "method-mobility-stockholm",
+        "method-mobility-centrality"
       ]),
       [
         "Mobilitetsdelen ar en konservativ plats- och tillganglighetsproxy, inte en individuell reseprognos.",
-        "GTFS-data ar representerade via versionsstyrd referensprofil i stallet for live-anrop i runtime."
+        "GTFS-data ar representerade via versionsstyrd referensprofil i stallet for live-anrop i runtime.",
+        `Lägesprofil ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} användes för att minska bilanvändning i centrala lägen.`
       ]
     ),
     explanation(
@@ -875,7 +972,7 @@ function calculateMobility(
       "explanation-mobility-car",
       "mobility.car",
       "Bilresor",
-      "Bilandelen justeras försiktigt uppåt när parkeringstalet är högt och kollektivtrafiktillgängligheten är svag.",
+      "Bilandelen justeras försiktigt uppåt när parkeringstalet är högt och lägesprofilen är mer perifer, och nedåt i centrala lägen.",
       "antal resor x bilandel x reseavstand x utslappsfaktor",
       [
         `${Math.round(annualTrips)} resor/år x ${Math.round(normalizedProfile.car * 100)} % x ${mobilityReference.avgTripLengthKmByMode.car} km`,
@@ -887,12 +984,19 @@ function calculateMobility(
           label: "Parkeringstal per person",
           value: people > 0 ? (parkingIntensity).toFixed(2) : "0.00",
           source: "derived"
+        },
+        {
+          key: "urbanContext",
+          label: "Lägesprofil",
+          value: LABELS.urbanContext[inputs.urbanContext],
+          source: request.urbanContext !== undefined ? "user" : "derived"
         }
       ],
       defaultsApplied,
       resolver.evidenceFor([
         "method-mobility-accessibility",
-        "method-mobility-stockholm"
+        "method-mobility-stockholm",
+        "method-mobility-centrality"
       ]),
       ["Parkeringens effekt ar en schabloniserad sensitivitet och inte en trafikmodell."]
     ),
@@ -940,8 +1044,15 @@ function calculateMobility(
         }
       ],
       defaultsApplied,
-      resolver.evidenceFor(["method-mobility-accessibility", "method-mobility-stockholm"]),
-      ["Posten ar en forenklad proxy for service- och besoksfloden i tidigt skede."]
+      resolver.evidenceFor([
+        "method-mobility-accessibility",
+        "method-mobility-stockholm",
+        "method-mobility-centrality"
+      ]),
+      [
+        "Posten ar en forenklad proxy for service- och besoksfloden i tidigt skede.",
+        `Lägesprofil ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} användes för att justera bilanvändning i linje med centralitetsforskning.`
+      ]
     )
   ];
 
@@ -993,9 +1104,14 @@ function calculateCoreCase(
     request.buildingFootprintM2 ?? area / Math.max(1, floorsAboveGround);
   const glazingRatioPct =
     request.glazingRatioPct ?? emissions.defaultGlazingRatioPct[request.buildingType];
+  const buildingForm = request.buildingForm ?? "normal";
   const parkingSpaces = request.parkingSpaces ?? 0;
   const landType = request.landType ?? "tidigare_bebyggd";
-  const foundationType = request.foundationType ?? "platta_pa_mark";
+  const groundCondition = resolveGroundCondition(request);
+  const foundationType = request.foundationType ?? inferFoundationTypeFromGround(groundCondition);
+  const parkingStructureType = resolveParkingStructureType(request);
+  const parkingGarageFloors =
+    parkingStructureType === "none" ? 0 : request.parkingGarageFloors ?? 1;
   const siteAreaM2 = request.siteAreaM2;
 
   const defaultsApplied = [
@@ -1008,8 +1124,20 @@ function calculateCoreCase(
     request.glazingRatioPct === undefined
       ? `Glasandel defaultades till ${glazingRatioPct} % för vald byggnadstyp.`
       : null,
+    request.buildingForm === undefined
+      ? `Byggnadsformen defaultades till ${LABELS.buildingForm[buildingForm].toLowerCase()} för en typisk screeningprofil.`
+      : null,
+    request.groundCondition === undefined
+      ? `Markförhållandet defaultades till ${LABELS.groundCondition[groundCondition].toLowerCase()}.`
+      : null,
     request.foundationType === undefined
-      ? `Grundläggning defaultades till ${LABELS.foundationType[foundationType].toLowerCase()}.`
+      ? `Grundläggning defaultades till ${LABELS.foundationType[foundationType].toLowerCase()} utifrån markförhållanden.`
+      : null,
+    request.parkingStructureType === undefined
+      ? "Parkeringslösning defaultades till inget garage."
+      : null,
+    parkingStructureType !== "none" && request.parkingGarageFloors === undefined
+      ? `Garagevåningar defaultades till ${parkingGarageFloors}.`
       : null,
     request.landType === undefined
       ? `Marktyp defaultades till ${LABELS.landType[landType].toLowerCase()}.`
@@ -1022,15 +1150,27 @@ function calculateCoreCase(
   const baseFoundationPerFootprint =
     typology.supplementaryKgCo2ePerM2.foundation * floorsAboveGround;
   const foundationMultiplier = emissions.foundationMultipliers[foundationType];
+  const foundationGroundMultiplier = emissions.foundationGroundMultipliers[groundCondition] ?? 1;
   const foundationKgCo2e = round(
-    buildingFootprintM2 * baseFoundationPerFootprint * foundationMultiplier
+    buildingFootprintM2 * baseFoundationPerFootprint * foundationMultiplier * foundationGroundMultiplier
   );
+  const parkingStructureBaseMultiplier =
+    emissions.parkingStructureMultipliers[parkingStructureType] ?? 1;
+  const parkingStructureFloorStepMultiplier =
+    emissions.parkingStructureFloorStepMultipliers[parkingStructureType] ?? 0;
+  const parkingStructureMultiplier =
+    parkingStructureType === "none"
+      ? 1
+      : parkingStructureBaseMultiplier *
+        (1 + Math.max(0, parkingGarageFloors - 1) * parkingStructureFloorStepMultiplier);
   const landKgCo2e =
     siteAreaM2 !== undefined
       ? round(siteAreaM2 * emissions.landUseFactorsKgCo2ePerM2[landType])
       : 0;
   const parkingKgCo2e =
-    parkingSpaces > 0 ? round(parkingSpaces * emissions.parkingKgCo2ePerSpace) : 0;
+    parkingSpaces > 0
+      ? round(parkingSpaces * emissions.parkingKgCo2ePerSpace * parkingStructureMultiplier)
+      : 0;
 
   const embodiedRawItems: BreakdownItem[] = [
     {
@@ -1046,7 +1186,7 @@ function calculateCoreCase(
       label: `Grundläggning (${LABELS.foundationType[foundationType]})`,
       valueKgCo2e: foundationKgCo2e,
       unit: "kgCO2e",
-      note: `${round(buildingFootprintM2)} m2 fotavtryck`,
+      note: `${round(buildingFootprintM2)} m2 fotavtryck • ${LABELS.groundCondition[groundCondition]}`,
       traceKey: "site.foundation"
     },
     {
@@ -1079,10 +1219,16 @@ function calculateCoreCase(
   if (parkingSpaces > 0) {
     embodiedRawItems.push({
       key: "parking",
-      label: "Parkering och mobilitetsyta",
+      label:
+        parkingStructureType === "none"
+          ? "Parkering och mobilitetsyta"
+          : `Parkering (${LABELS.parkingStructureType[parkingStructureType]}, ${parkingGarageFloors} vån)`,
       valueKgCo2e: parkingKgCo2e,
       unit: "kgCO2e",
-      note: `${round(parkingSpaces)} parkeringsplatser`,
+      note:
+        parkingStructureType === "none"
+          ? `${round(parkingSpaces)} parkeringsplatser`
+          : `${round(parkingSpaces)} parkeringsplatser • ${parkingGarageFloors} garagevåningar`,
       traceKey: "site.parking"
     });
   }
@@ -1092,12 +1238,14 @@ function calculateCoreCase(
     request.specificEnergyUseKwhM2Year ??
     energyBenchmark.standards[request.energyStandard];
   const uValueAdjustment = getUValueAdjustment(request, emissions.baselineUValues);
+  const formFactorMultiplier =
+    buildingForm === "kompakt" ? 0.95 : buildingForm === "fragmenterad" ? 1.06 : 1;
   const glazingAdjustment =
     request.specificEnergyUseKwhM2Year === undefined
       ? 1 + (glazingRatioPct - emissions.defaultGlazingRatioPct[request.buildingType]) / 250
       : 1;
   const adjustedSpecificEnergy =
-    baseSpecificEnergy * uValueAdjustment.multiplier * glazingAdjustment;
+    baseSpecificEnergy * uValueAdjustment.multiplier * glazingAdjustment * formFactorMultiplier;
   const annualEnergyUseKwh = adjustedSpecificEnergy * area;
   const annualHeatingEnergyKwh = annualEnergyUseKwh * (heatingProfile.heatingSharePct / 100);
   const annualElectricityKwh = annualEnergyUseKwh - annualHeatingEnergyKwh;
@@ -1161,6 +1309,10 @@ function calculateCoreCase(
       value: uValueAdjustment.note
     },
     {
+      label: "Byggnadsform",
+      value: `${LABELS.buildingForm[buildingForm]} • ${Math.round(formFactorMultiplier * 100)} % av basenergibehovet`
+    },
+    {
       label: "Osäkerhetsintervall",
       value: `±${DEFAULT_UNCERTAINTY_RANGE_PCT} %`
     }
@@ -1194,10 +1346,10 @@ function calculateCoreCase(
       "explanation-site-foundation",
       "site.foundation",
       "Grundläggning",
-      "Grundläggning räknas från härlett eller angivet fotavtryck och justeras med vald grundläggningstyp.",
-      "byggnadsfotavtryck x grundfaktor per m2 fotavtryck x multiplikator för grundläggning",
+      "Grundläggning räknas från härlett eller angivet fotavtryck och justeras med vald grundläggningstyp samt markförhållanden.",
+      "byggnadsfotavtryck x grundfaktor per m2 fotavtryck x multiplikator för grundläggning x markfaktor",
       [
-        `${round(buildingFootprintM2)} m2 x ${round(baseFoundationPerFootprint)} kg CO2e/m2 x ${foundationMultiplier.toFixed(2)}`,
+        `${round(buildingFootprintM2)} m2 x ${round(baseFoundationPerFootprint)} kg CO2e/m2 x ${foundationMultiplier.toFixed(2)} x ${foundationGroundMultiplier.toFixed(2)}`,
         `= ${foundationKgCo2e} kg CO2e`
       ],
       [
@@ -1206,11 +1358,25 @@ function calculateCoreCase(
           label: "Byggnadsfotavtryck",
           value: `${round(buildingFootprintM2)} m2`,
           source: request.buildingFootprintM2 !== undefined ? "user" : "derived"
+        },
+        {
+          key: "groundCondition",
+          label: "Markförhållande",
+          value: LABELS.groundCondition[groundCondition],
+          source: request.groundCondition !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
-      resolver.evidenceFor(["method-foundation-proxy", "method-embodied-standard"]),
-      ["Proxy för screening i tidigt skede. Ersätter inte geoteknisk eller konstruktiv dimensionering."]
+      resolver.evidenceFor([
+        "method-foundation-soil-proxy",
+        "method-foundation-proxy",
+        "method-embodied-standard"
+      ]),
+      [
+        "Proxy för screening i tidigt skede.",
+        "Mjuka jordar som lera och gyttja kan driva upp behovet av pålning och annan markförstärkning.",
+        "Ersätter inte geoteknisk eller konstruktiv dimensionering."
+      ]
     ),
     explanation(
       "explanation-embodied-envelope",
@@ -1266,27 +1432,40 @@ function calculateCoreCase(
           label: "Specifik energianvändning",
           value: `${baseSpecificEnergy.toFixed(1)} kWh/m2,år`,
           source: request.specificEnergyUseKwhM2Year !== undefined ? "user" : "reference"
+        },
+        {
+          key: "buildingForm",
+          label: "Byggnadsform",
+          value: LABELS.buildingForm[buildingForm],
+          source: request.buildingForm !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
       resolver.evidenceFor(
         request.heatingType === "fjarrvarme"
           ? request.specificEnergyUseKwhM2Year !== undefined
-            ? ["method-local-district-heating"]
+            ? ["method-local-district-heating", "method-building-shape-proxy"]
             : [
                 "method-energy-benchmark",
                 "method-ben-normalbruk",
                 "method-glazing-adjustment",
-                "method-local-district-heating"
+                "method-local-district-heating",
+                "method-building-shape-proxy"
               ]
           : request.specificEnergyUseKwhM2Year !== undefined
-            ? ["method-ben-normalbruk"]
-            : ["method-energy-benchmark", "method-ben-normalbruk", "method-glazing-adjustment"]
+            ? ["method-ben-normalbruk", "method-building-shape-proxy"]
+            : [
+                "method-energy-benchmark",
+                "method-ben-normalbruk",
+                "method-glazing-adjustment",
+                "method-building-shape-proxy"
+              ]
       ),
       [
         request.specificEnergyUseKwhM2Year !== undefined
           ? "Benchmarkschablon användes inte eftersom egen specifik energianvändning angavs."
-          : "Schablonenergi används när användaren inte anger egen specifik energianvändning."
+          : "Schablonenergi används när användaren inte anger egen specifik energianvändning.",
+        `Byggnadsform ${LABELS.buildingForm[buildingForm].toLowerCase()} användes som screeningsproxy för formfaktor.`
       ]
     ),
     explanation(
@@ -1343,15 +1522,23 @@ function calculateCoreCase(
   }
 
   if (parkingSpaces > 0) {
+    const parkingEvidenceMethods =
+      parkingStructureType === "none"
+        ? ["method-parking-proxy"]
+        : ["method-parking-garage-proxy", "method-parking-proxy"];
     explanations.push(
       explanation(
         "explanation-site-parking",
         "site.parking",
-        "Parkering",
-        "Parkeringsposten används som screeningvärde per parkeringsplats för att göra scenariojämförelser mer beslutsrelevanta.",
-        "antal parkeringsplatser x schablon per plats",
+        parkingStructureType === "none" ? "Parkering" : "Parkering och garage",
+        parkingStructureType === "none"
+          ? "Parkeringsposten används som screeningvärde per parkeringsplats för att göra scenariojämförelser mer beslutsrelevanta."
+          : "Parkeringsposten justeras för att fånga att garage ofta kräver mycket mer material än enklare markparkering.",
+        "antal parkeringsplatser x schablon per plats x garagefaktor",
         [
-          `${round(parkingSpaces)} platser x ${emissions.parkingKgCo2ePerSpace} kg CO2e/plats = ${parkingKgCo2e} kg CO2e`
+          parkingStructureType === "none"
+            ? `${round(parkingSpaces)} platser x ${emissions.parkingKgCo2ePerSpace} kg CO2e/plats = ${parkingKgCo2e} kg CO2e`
+            : `${round(parkingSpaces)} platser x ${emissions.parkingKgCo2ePerSpace} kg CO2e/plats x ${parkingStructureMultiplier.toFixed(2)} = ${parkingKgCo2e} kg CO2e`
         ],
         [
           {
@@ -1359,11 +1546,22 @@ function calculateCoreCase(
             label: "Parkeringsplatser",
             value: String(round(parkingSpaces)),
             source: "user"
+          },
+          {
+            key: "parkingStructureType",
+            label: "Parkeringslösning",
+            value: LABELS.parkingStructureType[parkingStructureType],
+            source: request.parkingStructureType !== undefined ? "user" : "default"
           }
         ],
         defaultsApplied,
-        resolver.evidenceFor(["method-parking-proxy"]),
-        ["Screeningpost för kommunal jämförelse, inte kalkyl för exakt anläggningsprojektering."]
+        resolver.evidenceFor(parkingEvidenceMethods),
+        [
+          "Screeningpost för kommunal jämförelse, inte kalkyl för exakt anläggningsprojektering.",
+          parkingStructureType === "none"
+            ? "Markparkering antas när ingen garage- eller underjordslösning anges."
+            : `${parkingGarageFloors} garagevåningar användes som proxy för strukturell komplexitet.`
+        ]
       )
     );
   }
@@ -1504,6 +1702,66 @@ function buildBaselineComparison(
   };
 }
 
+function estimateUncertaintyRangePct(
+  request: CalculateRequest,
+  core: CoreCalculation,
+  mobility: MobilityResult
+) {
+  let range = DEFAULT_UNCERTAINTY_RANGE_PCT - 6;
+
+  if (request.specificEnergyUseKwhM2Year === undefined) {
+    range += 4;
+  }
+
+  if (request.buildingForm === undefined) {
+    range += 2;
+  }
+
+  if (request.floorsAboveGround === undefined) {
+    range += 2;
+  }
+
+  if (request.buildingFootprintM2 === undefined) {
+    range += 2;
+  }
+
+  if (request.urbanContext === undefined) {
+    range += 2;
+  }
+
+  if (request.siteLocation === undefined && request.transitOverrides === undefined) {
+    range += 3;
+  }
+
+  if (request.siteAreaM2 === undefined) {
+    range += 2;
+  }
+
+  if (request.parkingStructureType === undefined) {
+    range += 2;
+  }
+
+  if (request.groundCondition === undefined) {
+    range += 1;
+  }
+
+  if (request.foundationType === undefined) {
+    range += 1;
+  }
+
+  if (request.interventionType && request.interventionType !== "nybyggnad") {
+    range += 3;
+  }
+
+  if (mobility.inputs.source === "default") {
+    range += 3;
+  }
+
+  range += Math.min(6, Math.max(0, core.defaultsApplied.length * 0.5));
+
+  return clamp(range, 8, 35);
+}
+
 function finaliseResult(input: {
   request: CalculateRequest;
   core: CoreCalculation;
@@ -1555,6 +1813,7 @@ function finaliseResult(input: {
     totalKgCo2e,
     input.mobility
   );
+  const uncertaintyRangePct = estimateUncertaintyRangePct(input.request, input.core, input.mobility);
 
   const assumptions: AssumptionEntry[] = [
     ...input.core.assumptions,
@@ -1563,8 +1822,33 @@ function finaliseResult(input: {
       value: LABELS.interventionType[input.request.interventionType ?? "nybyggnad"]
     },
     {
+      label: "Byggnadsform",
+      value: LABELS.buildingForm[input.request.buildingForm ?? "normal"]
+    },
+    {
+      label: "Markförhållande",
+      value: LABELS.groundCondition[input.request.groundCondition ?? "normal_mark"]
+    },
+    {
+      label: "Parkeringslösning",
+      value:
+        input.request.parkingStructureType && input.request.parkingStructureType !== "none"
+          ? `${LABELS.parkingStructureType[input.request.parkingStructureType]} • ${
+              input.request.parkingGarageFloors ?? 1
+            } vån`
+          : LABELS.parkingStructureType.none
+    },
+    {
+      label: "Lägesprofil",
+      value: LABELS.urbanContext[input.mobility.inputs.urbanContext]
+    },
+    {
       label: "Mobilitetsprofil",
       value: `Tillgänglighet ${input.mobility.inputs.accessibilityBand}`
+    },
+    {
+      label: "Osäkerhetsintervall",
+      value: `±${uncertaintyRangePct} %`
     },
     ...(input.extraAssumptions ?? [])
   ];
@@ -1747,11 +2031,13 @@ function finaliseResult(input: {
             ? ["method-energy-benchmark", "method-ben-normalbruk"]
             : action.id === "mobility-location"
               ? ["method-mobility-accessibility", "method-mobility-gtfs"]
-              : action.id === "parking"
-                ? ["method-parking-proxy", "method-mobility-accessibility"]
-                : action.id === "retention"
-                  ? ["method-ombyggnad-definition", "method-retrofit-proxy"]
-                  : ["method-energy-benchmark"];
+            : action.id === "parking"
+              ? ["method-parking-proxy", "method-mobility-accessibility"]
+              : action.id === "garage-volume"
+                ? ["method-parking-garage-proxy", "method-parking-proxy"]
+              : action.id === "retention"
+                ? ["method-ombyggnad-definition", "method-retrofit-proxy"]
+                : ["method-energy-benchmark"];
 
       return explanation(
         `explanation-${action.traceKey}`,
@@ -1798,7 +2084,7 @@ function finaliseResult(input: {
     mobility: input.mobility,
     assumptions,
     sources,
-    uncertaintyRangePct: DEFAULT_UNCERTAINTY_RANGE_PCT,
+    uncertaintyRangePct,
     totals: toMetricValue("Totalt klimatutsläpp", totalKgCo2e, "kg CO2e", "totals"),
     perM2: toMetricValue("Klimatutsläpp per m2", perM2KgCo2e, "kg CO2e/m2", "perM2"),
     perPerson: toMetricValue(

@@ -113,6 +113,14 @@ function toPlanObject(
       frameMaterial: normalizeString(properties.frameMaterial) as PlanObject["quickInput"]["frameMaterial"],
       energyStandard: normalizeString(properties.energyStandard) as PlanObject["quickInput"]["energyStandard"],
       heatingType: normalizeString(properties.heatingType) as PlanObject["quickInput"]["heatingType"],
+      buildingForm:
+        properties.buildingForm !== undefined
+          ? (normalizeString(properties.buildingForm) as PlanObject["quickInput"]["buildingForm"])
+          : undefined,
+      urbanContext:
+        properties.urbanContext !== undefined
+          ? (normalizeString(properties.urbanContext) as PlanObject["quickInput"]["urbanContext"])
+          : undefined,
       siteAreaM2:
         properties.siteAreaM2 !== undefined
           ? normalizeNumber(properties.siteAreaM2, "siteAreaM2")
@@ -133,9 +141,21 @@ function toPlanObject(
         properties.parkingSpaces !== undefined
           ? normalizeNumber(properties.parkingSpaces, "parkingSpaces")
           : undefined,
+      parkingStructureType:
+        properties.parkingStructureType !== undefined
+          ? (normalizeString(properties.parkingStructureType) as PlanObject["quickInput"]["parkingStructureType"])
+          : undefined,
+      parkingGarageFloors:
+        properties.parkingGarageFloors !== undefined
+          ? normalizeNumber(properties.parkingGarageFloors, "parkingGarageFloors")
+          : undefined,
       landType:
         properties.landType !== undefined
           ? normalizeString(properties.landType) as PlanObject["quickInput"]["landType"]
+          : undefined,
+      groundCondition:
+        properties.groundCondition !== undefined
+          ? (normalizeString(properties.groundCondition) as PlanObject["quickInput"]["groundCondition"])
           : undefined,
       foundationType:
         properties.foundationType !== undefined
@@ -298,7 +318,10 @@ export function importTabularRows(payload: ScenarioImportTabularRequest) {
         buildingFootprintM2: row.buildingFootprintM2,
         glazingRatioPct: row.glazingRatioPct,
         parkingSpaces: row.parkingSpaces,
+        parkingStructureType: row.parkingStructureType,
+        parkingGarageFloors: row.parkingGarageFloors,
         landType: row.landType,
+        groundCondition: row.groundCondition,
         foundationType: row.foundationType,
         lat: row.lat,
         lon: row.lon,

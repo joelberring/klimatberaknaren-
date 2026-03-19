@@ -52,6 +52,14 @@
     "kallare": 1.18,
     "palar": 1.28
   },
+  "foundationGroundMultipliers": {
+    "berg_fastmark": 0.88,
+    "sand_grus": 0.95,
+    "normal_mark": 1,
+    "lera_mjuk": 1.14,
+    "gyttja_mjuk": 1.28,
+    "fyllning_osaker": 1.08
+  },
   "landUseFactorsKgCo2ePerM2": {
     "tidigare_bebyggd": 2,
     "hardgjord": 4,
@@ -59,5 +67,14 @@
     "skog": 18,
     "jordbruksmark": 12
   },
-  "parkingKgCo2ePerSpace": 18000
+  "parkingKgCo2ePerSpace": 18000,
+  "parkingStructureMultipliers": {
+    "none": 1,
+    "garage_ovan_mark": 1.32,
+    "garage_under_mark": 1.68
+  },
+  "parkingStructureFloorStepMultipliers": {
+    "garage_ovan_mark": 0.11,
+    "garage_under_mark": 0.15
+  }
 }

@@ -1,14 +1,18 @@
 import {
   BUILDING_TYPES,
+  BUILDING_FORMS,
   COMPARISON_METRICS,
   ENERGY_STANDARDS,
+  GROUND_CONDITIONS,
   FOUNDATION_TYPES,
   FRAME_MATERIALS,
   HEATING_TYPES,
   INTERVENTION_TYPES,
   LAND_TYPES,
   LABELS,
+  PARKING_STRUCTURE_TYPES,
   RETROFIT_DEPTHS,
+  URBAN_CONTEXTS,
   formatNumber,
   type BenchmarkProfile,
   type BenchmarkComparison,
@@ -18,7 +22,9 @@ import {
   type ComparisonMetric,
   type DataSourcesResponse,
   type Project,
+  type Scenario,
   type ScenarioComparison,
+  type ScenarioRun,
   type StandardProfile,
   type UserSession,
   type WorkspaceResponse
@@ -38,11 +44,18 @@ import {
   importTabularApi,
   loginSession
 } from "./lib/api";
+import { BenchmarkPositionChart } from "./components/BenchmarkPositionChart";
+import { AnalysisPage } from "./components/AnalysisPage";
 import { BreakdownChart } from "./components/BreakdownChart";
 import { ExplanationDrawer } from "./components/ExplanationDrawer";
 import { GeoJsonMap } from "./components/GeoJsonMap";
-import { MetricCard } from "./components/MetricCard";
 import { ExplainButton } from "./components/ExplainButton";
+import { LifecycleShareChart } from "./components/LifecycleShareChart";
+import { RunTrendChart } from "./components/RunTrendChart";
+import { Building3DViewer } from "./components/Building3DViewer";
+import { DecisionWorkbench } from "./components/DecisionWorkbench";
+import { getActiveScenarioRun } from "./lib/analysis";
+import { BUILDING_TYPE_PRESETS } from "./lib/decisionSupport";
 
 interface FormState {
   buildingType: CalculateRequest["buildingType"];
@@ -51,6 +64,8 @@ interface FormState {
   frameMaterial: CalculateRequest["frameMaterial"];
   energyStandard: CalculateRequest["energyStandard"];
   heatingType: CalculateRequest["heatingType"];
+  buildingForm: CalculateRequest["buildingForm"];
+  urbanContext: CalculateRequest["urbanContext"];
   specificEnergyUseKwhM2Year: string;
   wallUValue: string;
   roofUValue: string;
@@ -62,12 +77,15 @@ interface FormState {
   buildingFootprintM2: string;
   glazingRatioPct: string;
   parkingSpaces: string;
+  parkingStructureType: NonNullable<CalculateRequest["parkingStructureType"]>;
+  parkingGarageFloors: string;
   siteLat: string;
   siteLon: string;
   distanceToTransitStopM: string;
   distanceToRailStationM: string;
   departuresPerHour: string;
   landType: NonNullable<CalculateRequest["landType"]>;
+  groundCondition: NonNullable<CalculateRequest["groundCondition"]>;
   foundationType: NonNullable<CalculateRequest["foundationType"]>;
   interventionType: NonNullable<CalculateRequest["interventionType"]>;
   existingGrossFloorAreaM2: string;
@@ -88,6 +106,8 @@ const initialForm: FormState = {
   frameMaterial: "betong",
   energyStandard: "normal",
   heatingType: "fjarrvarme",
+  buildingForm: "normal",
+  urbanContext: "urban",
   specificEnergyUseKwhM2Year: "",
   wallUValue: "",
   roofUValue: "",
@@ -99,12 +119,15 @@ const initialForm: FormState = {
   buildingFootprintM2: "",
   glazingRatioPct: "",
   parkingSpaces: "",
+  parkingStructureType: "none",
+  parkingGarageFloors: "",
   siteLat: "",
   siteLon: "",
   distanceToTransitStopM: "",
   distanceToRailStationM: "",
   departuresPerHour: "",
   landType: "tidigare_bebyggd",
+  groundCondition: "normal_mark",
   foundationType: "platta_pa_mark",
   interventionType: "nybyggnad",
   existingGrossFloorAreaM2: "",
@@ -117,6 +140,50 @@ const initialForm: FormState = {
   addedGrossFloorAreaM2: "",
   addedFloors: ""
 };
+
+function createDraftForm(seed?: Partial<FormState>): FormState {
+  const form: FormState = {
+    ...initialForm,
+    buildingType: "flerbostadshus",
+    grossFloorAreaM2: "1200",
+    buildYear: "2032",
+    frameMaterial: "betong",
+    energyStandard: "normal",
+    heatingType: "fjarrvarme",
+    buildingForm: "normal",
+    urbanContext: "urban",
+    parkingStructureType: "none",
+    groundCondition: "normal_mark",
+    ...seed
+  };
+
+  return applyBuildingTypePresetToForm(form, form.buildingType);
+}
+
+function applyBuildingTypePresetToForm(form: FormState, buildingType: FormState["buildingType"]) {
+  const preset = BUILDING_TYPE_PRESETS[buildingType];
+
+  return {
+    ...form,
+    buildingType,
+    buildingForm: form.buildingForm === initialForm.buildingForm ? preset.buildingForm : form.buildingForm,
+    urbanContext: form.urbanContext === initialForm.urbanContext ? preset.urbanContext : form.urbanContext,
+    floorsAboveGround:
+      form.floorsAboveGround === initialForm.floorsAboveGround
+        ? String(preset.floorsAboveGround)
+        : form.floorsAboveGround,
+    parkingStructureType:
+      form.parkingStructureType === initialForm.parkingStructureType
+        ? preset.parkingStructureType
+        : form.parkingStructureType,
+    parkingGarageFloors:
+      form.parkingStructureType === "none"
+        ? ""
+        : form.parkingGarageFloors === initialForm.parkingGarageFloors
+          ? String(preset.parkingGarageFloors)
+          : form.parkingGarageFloors
+  };
+}
 
 function toNumber(value: string) {
   if (!value.trim()) {
@@ -138,6 +205,8 @@ function payloadToForm(payload?: CalculateRequest): FormState {
     frameMaterial: payload.frameMaterial,
     energyStandard: payload.energyStandard,
     heatingType: payload.heatingType,
+    buildingForm: payload.buildingForm ?? "normal",
+    urbanContext: payload.urbanContext ?? "urban",
     specificEnergyUseKwhM2Year: payload.specificEnergyUseKwhM2Year
       ? String(payload.specificEnergyUseKwhM2Year)
       : "",
@@ -151,6 +220,8 @@ function payloadToForm(payload?: CalculateRequest): FormState {
     buildingFootprintM2: payload.buildingFootprintM2 ? String(payload.buildingFootprintM2) : "",
     glazingRatioPct: payload.glazingRatioPct ? String(payload.glazingRatioPct) : "",
     parkingSpaces: payload.parkingSpaces ? String(payload.parkingSpaces) : "",
+    parkingStructureType: payload.parkingStructureType ?? "none",
+    parkingGarageFloors: payload.parkingGarageFloors ? String(payload.parkingGarageFloors) : "",
     siteLat: payload.siteLocation ? String(payload.siteLocation.lat) : "",
     siteLon: payload.siteLocation ? String(payload.siteLocation.lon) : "",
     distanceToTransitStopM: payload.transitOverrides?.distanceToTransitStopM
@@ -163,6 +234,7 @@ function payloadToForm(payload?: CalculateRequest): FormState {
       ? String(payload.transitOverrides.departuresPerHour)
       : "",
     landType: payload.landType ?? "tidigare_bebyggd",
+    groundCondition: payload.groundCondition ?? "normal_mark",
     foundationType: payload.foundationType ?? "platta_pa_mark",
     interventionType: payload.interventionType ?? "nybyggnad",
     existingGrossFloorAreaM2: payload.existingBuilding?.grossFloorAreaM2
@@ -208,6 +280,9 @@ function buildPayload(form: FormState) {
     heatingType: form.heatingType
   };
 
+  payload.buildingForm = form.buildingForm;
+  payload.urbanContext = form.urbanContext;
+
   const specificEnergyUseKwhM2Year = toNumber(form.specificEnergyUseKwhM2Year);
   if (specificEnergyUseKwhM2Year !== undefined) {
     payload.specificEnergyUseKwhM2Year = specificEnergyUseKwhM2Year;
@@ -248,6 +323,13 @@ function buildPayload(form: FormState) {
     payload.parkingSpaces = parkingSpaces;
   }
 
+  payload.parkingStructureType = form.parkingStructureType;
+
+  const parkingGarageFloors = toNumber(form.parkingGarageFloors);
+  if (form.parkingStructureType !== "none" && parkingGarageFloors !== undefined) {
+    payload.parkingGarageFloors = parkingGarageFloors;
+  }
+
   const siteLat = toNumber(form.siteLat);
   const siteLon = toNumber(form.siteLon);
   if (siteLat !== undefined && siteLon !== undefined) {
@@ -273,6 +355,7 @@ function buildPayload(form: FormState) {
   }
 
   payload.landType = form.landType;
+  payload.groundCondition = form.groundCondition;
   payload.foundationType = form.foundationType;
   payload.interventionType = form.interventionType;
 
@@ -613,6 +696,91 @@ function getMetricLabel(metric: ComparisonMetric) {
   return "Per ha";
 }
 
+function formatRunTimestamp(value: string) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function resolveSourceTitles(sourceIds: string[], dataSources?: DataSourcesResponse | null) {
+  if (!dataSources) {
+    return [];
+  }
+
+  return sourceIds
+    .map((sourceId) => dataSources.sources.find((source) => source.id === sourceId)?.title)
+    .filter((title): title is string => Boolean(title));
+}
+
+function getBenchmarkStatusClass(status: BenchmarkComparison["status"]) {
+  if (status === "below") {
+    return "comparison-status comparison-status-good";
+  }
+
+  if (status === "above") {
+    return "comparison-status comparison-status-warn";
+  }
+
+  return "comparison-status comparison-status-neutral";
+}
+
+function getRunDriverChanges(baseResult: CalculationResult, candidateResult: CalculationResult) {
+  const labels = new Set([
+    ...baseResult.topDrivers.map((driver) => driver.label),
+    ...candidateResult.topDrivers.map((driver) => driver.label)
+  ]);
+
+  return Array.from(labels)
+    .map((label) => {
+      const baseDriver = baseResult.topDrivers.find((driver) => driver.label === label);
+      const candidateDriver = candidateResult.topDrivers.find((driver) => driver.label === label);
+      const baseValue = baseDriver?.impactKgCo2e ?? 0;
+      const candidateValue = candidateDriver?.impactKgCo2e ?? 0;
+      return {
+        label,
+        delta: candidateValue - baseValue,
+        candidateValue,
+        explanation: candidateDriver?.explanation ?? baseDriver?.explanation ?? "Ingen kommentar."
+      };
+    })
+    .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+    .slice(0, 4);
+}
+
+type AppRoute =
+  | { kind: "workspace" }
+  | { kind: "analysis"; scenarioId: string; runId?: string };
+
+function parseAppRoute(pathname: string, search: string): AppRoute {
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (segments[0] === "analysis" && segments[1]) {
+    const params = new URLSearchParams(search);
+    return {
+      kind: "analysis",
+      scenarioId: decodeURIComponent(segments[1]),
+      runId: params.get("runId") ?? undefined
+    };
+  }
+
+  return { kind: "workspace" };
+}
+
+function buildAnalysisPath(scenarioId: string, runId?: string) {
+  const params = new URLSearchParams();
+
+  if (runId) {
+    params.set("runId", runId);
+  }
+
+  const query = params.toString();
+  return `/analysis/${encodeURIComponent(scenarioId)}${query ? `?${query}` : ""}`;
+}
+
 function ScenarioComparisonBoard({
   project,
   benchmarkProfiles,
@@ -881,16 +1049,42 @@ function ScenarioComparisonBoard({
 
 function ResultMatrix({
   title,
+  scenario,
   result,
   comparison,
+  dataSources,
+  benchmarkProfiles = [],
+  standardProfiles = [],
+  selectedBenchmarkIds = [],
+  selectedStandardIds = [],
+  selectedMetric = "perM2",
+  baseRunId,
+  candidateRunId,
+  onBaseRunChange,
+  onCandidateRunChange,
+  onOpenAnalysis,
   onExplain
 }: {
   title: string;
+  scenario?: Scenario | null;
   result: CalculationResult | null;
   comparison?: ScenarioComparison | null;
+  dataSources?: DataSourcesResponse | null;
+  benchmarkProfiles?: BenchmarkProfile[];
+  standardProfiles?: StandardProfile[];
+  selectedBenchmarkIds?: string[];
+  selectedStandardIds?: string[];
+  selectedMetric?: ComparisonMetric;
+  baseRunId?: string;
+  candidateRunId?: string;
+  onBaseRunChange?: (runId: string) => void;
+  onCandidateRunChange?: (runId: string) => void;
+  onOpenAnalysis?: (scenarioId: string, runId?: string) => void;
   onExplain?: (traceKey: string) => void;
 }) {
-  if (!result) {
+  const activeResult = scenario?.latestResult ?? result;
+
+  if (!activeResult) {
     return (
       <section className="panel">
         <div className="section-heading">
@@ -905,103 +1099,485 @@ function ResultMatrix({
     );
   }
 
-  const methodStatus = getMethodStatus(result);
+  const runs = scenario?.runs ?? [];
+  const candidateRun =
+    runs.find((run) => run.id === candidateRunId) ?? runs[runs.length - 1] ?? null;
+  const baseRun =
+    runs.find((run) => run.id === baseRunId) ??
+    (runs.length > 1 ? runs[runs.length - 2] : null);
+  const candidateResult = candidateRun?.result ?? activeResult;
+  const candidateInput =
+    candidateRun?.inputSnapshot ?? scenario?.planObjects[0]?.quickInput ?? scenario?.quickInput;
+  const methodStatus = getMethodStatus(candidateResult);
+  const analysisButton = scenario && onOpenAnalysis ? (
+    <div className="result-module-actions">
+      <button
+        type="button"
+        className="ghost-button"
+        onClick={() => onOpenAnalysis(scenario.id, candidateRun?.id)}
+      >
+        Visa analys
+      </button>
+    </div>
+  ) : null;
+  const selectedBenchmarks = benchmarkProfiles.filter((profile) =>
+    selectedBenchmarkIds.includes(profile.id)
+  );
+  const standardDataset = dataSources?.datasets.find((dataset) => dataset.dataset === "standard-profiles");
+  const applicableStandards = standardProfiles.filter((profile) => {
+    const buildingType = candidateInput?.buildingType;
+    const interventionType = candidateInput?.interventionType ?? "nybyggnad";
+    return (
+      (!buildingType || profile.applicableBuildingTypes.includes(buildingType)) &&
+      profile.applicableInterventions.includes(interventionType)
+    );
+  });
+  const selectedStandards = applicableStandards.filter((profile) =>
+    selectedStandardIds.includes(profile.id)
+  );
+  const benchmarkRows = [
+    {
+      id: "actual-run",
+      label: candidateRun ? "Aktuell körning" : "Aktuellt resultat",
+      value: getScenarioMetricValue(candidateResult, selectedMetric),
+      kind: "actual" as const,
+      meta: candidateRun ? formatRunTimestamp(candidateRun.createdAt) : "Senaste resultat"
+    },
+    ...selectedBenchmarks.flatMap((profile) => [
+      {
+        id: `${profile.id}-normal`,
+        label: `${profile.name} normal`,
+        value: getBenchmarkMetricValue(profile, selectedMetric, "Normalvärde", candidateResult),
+        kind: "benchmark" as const,
+        meta: `${profile.sourceLabel} • v${profile.version}`
+      },
+      {
+        id: `${profile.id}-target`,
+        label: `${profile.name} mål`,
+        value: getBenchmarkMetricValue(profile, selectedMetric, "Målvärde", candidateResult),
+        kind: "target" as const,
+        meta: `Uppdaterad ${profile.updatedAt}`
+      }
+    ]),
+    ...selectedStandards
+      .filter((profile) => getStandardMetricValue(profile, selectedMetric) !== undefined)
+      .map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        value: getStandardMetricValue(profile, selectedMetric) ?? 0,
+        kind: "standard" as const,
+        meta: `${LABELS.standardScheme[profile.scheme]} ${profile.version}`
+      }))
+  ].filter((row): row is { id: string; label: string; value: number; kind: "actual" | "benchmark" | "target" | "standard"; meta: string } => row.value !== undefined);
+  const trendPoints = runs.map((run) => ({
+    id: run.id,
+    label: formatRunTimestamp(run.createdAt),
+    value: getScenarioMetricValue(run.result, selectedMetric),
+    meta:
+      run.id === candidateRun?.id
+        ? "Aktiv körning"
+        : run.id === baseRun?.id
+          ? "Bas för jämförelse"
+          : "Sparad körning"
+  }));
+  const benchmarkComparisons = [...candidateResult.vsBenchmark, ...candidateResult.vsTarget].filter(
+    (item) => item.metric === selectedMetric
+  );
+  const runDriverChanges =
+    baseRun?.result ? getRunDriverChanges(baseRun.result, candidateResult) : [];
+  const lifecycleItems = [
+    {
+      key: "embodied",
+      label: "Embodied",
+      value: candidateResult.embodied.totalKgCo2e
+    },
+    {
+      key: "operational",
+      label: "Drift över livslängd",
+      value: candidateResult.operational.lifetimeKgCo2e
+    },
+    {
+      key: "mobility",
+      label: "Mobilitet över livslängd",
+      value: candidateResult.mobility.lifetimeKgCo2e
+    }
+  ];
+  const scenarioBuildingForms = Array.from(
+    new Set(
+      (scenario?.planObjects ?? []).map((planObject) => planObject.quickInput.buildingForm ?? "normal")
+    )
+  );
+  const scenarioUrbanContexts = Array.from(
+    new Set(
+      (scenario?.planObjects ?? []).map((planObject) => planObject.quickInput.urbanContext ?? "urban")
+    )
+  );
+  const scenarioBuildingFormLabel =
+    scenarioBuildingForms.length === 1
+      ? LABELS.buildingForm[scenarioBuildingForms[0]]
+      : scenarioBuildingForms.length > 1
+        ? "Flera byggnadsformer"
+        : LABELS.buildingForm[candidateInput?.buildingForm ?? "normal"];
+  const scenarioUrbanContextLabel =
+    scenarioUrbanContexts.length === 1
+      ? LABELS.urbanContext[scenarioUrbanContexts[0]]
+      : scenarioUrbanContexts.length > 1
+        ? "Flera lägen"
+        : LABELS.urbanContext[candidateResult.mobility.inputs.urbanContext];
 
   return (
-    <>
-      <section className="panel">
+    <section className="panel result-module">
+      <section className="result-module-header">
         <div className="section-heading">
           <p className="eyebrow">Resultat</p>
           <h2>{title}</h2>
         </div>
-        <div className="metrics-grid">
-          <MetricCard
-            label={result.totals.label}
-            value={result.totals.value}
-            unit={result.totals.unit}
-            uncertaintyPct={result.uncertaintyRangePct}
-            accent="sun"
-            subtitle="Embodied + drift över livslängd"
-            onExplain={
-              result.totals.traceKey && onExplain
-                ? () => onExplain(result.totals.traceKey ?? "totals")
-                : undefined
-            }
-          />
-          <MetricCard
-            label={result.perM2.label}
-            value={result.perM2.value}
-            unit={result.perM2.unit}
-            uncertaintyPct={result.uncertaintyRangePct}
-            accent="forest"
-            subtitle="Används för benchmark mellan alternativ"
-            onExplain={
-              result.perM2.traceKey && onExplain
-                ? () => onExplain(result.perM2.traceKey ?? "perM2")
-                : undefined
-            }
-          />
-          <MetricCard
-            label={result.perPerson.label}
-            value={result.perPerson.value}
-            unit={result.perPerson.unit}
-            uncertaintyPct={result.uncertaintyRangePct}
-            accent="forest"
-            subtitle={`${result.population.totalPeople} personer i underlaget`}
-            onExplain={
-              result.perPerson.traceKey && onExplain
-                ? () => onExplain(result.perPerson.traceKey ?? "perPerson")
-                : undefined
-            }
-          />
-          {result.perHa ? (
-            <MetricCard
-              label={result.perHa.label}
-              value={result.perHa.value}
-              unit={result.perHa.unit}
-              uncertaintyPct={result.uncertaintyRangePct}
-              accent="forest"
-              subtitle="Visas när platsyta finns i underlaget"
-              onExplain={
-                result.perHa.traceKey && onExplain
-                  ? () => onExplain(result.perHa?.traceKey ?? "perHa")
-                  : undefined
-              }
-            />
+        {analysisButton}
+        <div className="report-kpi-grid">
+          <article className="report-kpi">
+            <div className="inline-with-action">
+              <span>{candidateResult.totals.label}</span>
+              {candidateResult.totals.traceKey && onExplain ? (
+                <ExplainButton
+                  label={candidateResult.totals.label}
+                  onClick={() => onExplain(candidateResult.totals.traceKey ?? "totals")}
+                />
+              ) : null}
+            </div>
+            <strong>
+              {formatNumber(candidateResult.totals.value)} {candidateResult.totals.unit}
+            </strong>
+            <span>Embodied + drift + mobilitet över livslängd</span>
+          </article>
+          <article className="report-kpi">
+            <div className="inline-with-action">
+              <span>{candidateResult.perM2.label}</span>
+              {candidateResult.perM2.traceKey && onExplain ? (
+                <ExplainButton
+                  label={candidateResult.perM2.label}
+                  onClick={() => onExplain(candidateResult.perM2.traceKey ?? "perM2")}
+                />
+              ) : null}
+            </div>
+            <strong>
+              {formatNumber(candidateResult.perM2.value)} {candidateResult.perM2.unit}
+            </strong>
+            <span>Huvudmått för benchmark i rapportvyn</span>
+          </article>
+          <article className="report-kpi">
+            <div className="inline-with-action">
+              <span>{candidateResult.perPerson.label}</span>
+              {candidateResult.perPerson.traceKey && onExplain ? (
+                <ExplainButton
+                  label={candidateResult.perPerson.label}
+                  onClick={() => onExplain(candidateResult.perPerson.traceKey ?? "perPerson")}
+                />
+              ) : null}
+            </div>
+            <strong>
+              {formatNumber(candidateResult.perPerson.value)} {candidateResult.perPerson.unit}
+            </strong>
+            <span>{candidateResult.population.totalPeople} personer i underlaget</span>
+          </article>
+          {candidateResult.perHa ? (
+            <article className="report-kpi">
+              <div className="inline-with-action">
+                <span>{candidateResult.perHa.label}</span>
+                {candidateResult.perHa.traceKey && onExplain ? (
+                  <ExplainButton
+                    label={candidateResult.perHa.label}
+                    onClick={() => onExplain(candidateResult.perHa?.traceKey ?? "perHa")}
+                  />
+                ) : null}
+              </div>
+              <strong>
+                {formatNumber(candidateResult.perHa.value)} {candidateResult.perHa.unit}
+              </strong>
+              <span>Visas när platsyta finns i underlaget</span>
+            </article>
           ) : null}
         </div>
       </section>
 
-      <section className="details-grid">
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Mobilitet</p>
-            <h3>Livscykel för användarresor</h3>
-          </div>
-          <div className="metrics-grid">
-            <MetricCard
-              label="Mobilitet per år"
-              value={result.mobility.annualKgCo2e}
-              unit="kg CO2e/år"
-              uncertaintyPct={result.uncertaintyRangePct}
-              accent="forest"
-              subtitle={`Profil ${result.mobility.inputs.accessibilityBand}`}
-              onExplain={onExplain ? () => onExplain("mobility.total") : undefined}
-            />
-            <MetricCard
-              label="Mobilitet över livslängd"
-              value={result.mobility.lifetimeKgCo2e}
-              unit="kg CO2e"
-              uncertaintyPct={result.uncertaintyRangePct}
-              accent="sun"
-              subtitle="Ingår i huvudtotalen"
-              onExplain={onExplain ? () => onExplain("mobility.total") : undefined}
-            />
-          </div>
-        </section>
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Benchmark</p>
+          <h3>Benchmarkstatus och referenser</h3>
+        </div>
+        <p className="microcopy">
+          Vald visning: {getMetricLabel(selectedMetric)}. Resultatet jämförs mot kommunprofil och valda standardprofiler med tydliga källspår.
+        </p>
+        <div className="report-dual-grid">
+          <BenchmarkPositionChart
+            title={`Position för ${getMetricLabel(selectedMetric).toLowerCase()}`}
+            unit={getScenarioMetricUnit(candidateResult, selectedMetric)}
+            rows={benchmarkRows}
+          />
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Benchmarkstatus</p>
+              <h3>Aktuella gap</h3>
+            </div>
+            <div className="comparison-list">
+              {benchmarkComparisons.map((item) => (
+                <article key={`${item.referenceLabel}-${item.metric}`} className="comparison-card">
+                  <strong className="inline-with-action">
+                    <span>
+                      {item.referenceLabel} • {item.label}
+                    </span>
+                    {item.traceKey && onExplain ? (
+                      <ExplainButton
+                        label={`${item.referenceLabel} ${item.label}`}
+                        onClick={() => onExplain(item.traceKey ?? "perM2")}
+                      />
+                    ) : null}
+                  </strong>
+                  <span>
+                    Utfall {formatNumber(item.actualValue)} mot referens {formatNumber(item.referenceValue)}
+                  </span>
+                  <span className={getBenchmarkStatusClass(item.status)}>
+                    {item.delta > 0 ? "+" : ""}
+                    {formatNumber(item.delta)} ({item.deltaPct}%)
+                  </span>
+                </article>
+              ))}
+            </div>
+            <div className="report-table">
+              {selectedBenchmarks.map((profile) => (
+                <div key={profile.id} className="report-table-row">
+                  <strong>{profile.name}</strong>
+                  <span>{profile.applicability}</span>
+                  <span>
+                    {profile.sourceLabel} • v{profile.version} • {profile.updatedAt}
+                  </span>
+                </div>
+              ))}
+              {selectedStandards.map((profile) => (
+                <div key={profile.id} className="report-table-row">
+                  <strong>{profile.label}</strong>
+                  <span>
+                    {LABELS.standardScheme[profile.scheme]} • {profile.version} • {profile.level}
+                  </span>
+                  <span>
+                    {resolveSourceTitles(profile.sourceIds, dataSources).join(", ") || "Bundlad referenskälla"}
+                    {standardDataset ? ` • uppdaterad ${standardDataset.updatedAt}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
 
-        {result.baselineExisting && result.baselineComparison ? (
-          <section className="panel panel-soft">
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Form och läge</p>
+          <h3>Byggnadsform, kompakthet och centralitet</h3>
+        </div>
+        <div className="comparison-list">
+          <article className="comparison-card">
+            <strong>Byggnadsform</strong>
+            <span>{scenarioBuildingFormLabel}</span>
+            <span>Formfaktorn används som en screeningproxy för hur kompakt byggnaden är.</span>
+          </article>
+          <article className="comparison-card">
+            <strong>Lägesprofil</strong>
+            <span>{scenarioUrbanContextLabel}</span>
+            <span>Centralare lägen och bättre serviceaccess ger lägre bilanvändning i modellen.</span>
+          </article>
+          <article className="comparison-card">
+            <strong>Tillgänglighet</strong>
+            <span>{candidateResult.mobility.inputs.accessibilityBand}</span>
+            <span>Bandad proxy baserad på transitavstånd och avgångsfrekvens.</span>
+          </article>
+        </div>
+      </section>
+
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Körningsjämförelse</p>
+          <h3>Jämför två sparade körningar</h3>
+        </div>
+        {runs.length >= 2 ? (
+          <>
+            <div className="report-controls">
+              <label>
+                Bas körning
+                <select
+                  value={baseRun?.id ?? ""}
+                  onChange={(event) => onBaseRunChange?.(event.target.value)}
+                >
+                  {runs.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {formatRunTimestamp(run.createdAt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Kandidatkörning
+                <select
+                  value={candidateRun?.id ?? ""}
+                  onChange={(event) => onCandidateRunChange?.(event.target.value)}
+                >
+                  {runs.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {formatRunTimestamp(run.createdAt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {baseRun ? (
+              <div className="report-table">
+                {COMPARISON_METRICS.filter(
+                  (metric) =>
+                    metric !== "perHa" || (baseRun.result.perHa && candidateResult.perHa)
+                ).map((metric) => {
+                  const baseValue = getScenarioMetricValue(baseRun.result, metric);
+                  const candidateValue = getScenarioMetricValue(candidateResult, metric);
+                  const delta = candidateValue - baseValue;
+                  return (
+                    <div key={metric} className="report-table-row">
+                      <strong>{getMetricLabel(metric)}</strong>
+                      <span>
+                        {formatNumber(baseValue)} → {formatNumber(candidateValue)}{" "}
+                        {getScenarioMetricUnit(candidateResult, metric)}
+                      </span>
+                      <span>{delta > 0 ? "+" : ""}{formatNumber(delta)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            <div className="comparison-list">
+              {runDriverChanges.map((driver) => (
+                <article key={driver.label} className="comparison-card">
+                  <strong>{driver.label}</strong>
+                  <span>{driver.explanation}</span>
+                  <span>{driver.delta > 0 ? "+" : ""}{formatNumber(driver.delta)} kg CO2e</span>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="empty-state">
+            <strong>Minst två körningar behövs för att jämföra över tid.</strong>
+            <p>När scenariot beräknas flera gånger sparas varje körning automatiskt här.</p>
+          </div>
+        )}
+
+        {comparison ? (
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Scenario mot scenario</p>
+              <h3>Separat jämförelse mellan alternativ</h3>
+            </div>
+            <div className="comparison-list">
+              {comparison.metrics.map((metric) => (
+                <article key={metric.metric} className="comparison-card">
+                  <strong>{getMetricLabel(metric.metric)}</strong>
+                  <span>
+                    Bas {formatNumber(metric.baseValue)} → Kandidat {formatNumber(metric.candidateValue)}
+                  </span>
+                  <span>{metric.delta > 0 ? "+" : ""}{formatNumber(metric.delta)} ({metric.deltaPct}%)</span>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </section>
+
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Diagram</p>
+          <h3>Trend och fördelning</h3>
+        </div>
+        <div className="report-dual-grid">
+          <RunTrendChart
+            title={`Utveckling över sparade körningar (${getMetricLabel(selectedMetric).toLowerCase()})`}
+            unit={getScenarioMetricUnit(candidateResult, selectedMetric)}
+            points={trendPoints}
+          />
+          <LifecycleShareChart title="Livscykelfördelning" items={lifecycleItems} />
+        </div>
+        <div className="details-grid">
+          <BreakdownChart
+            title="Embodied klimatpåverkan"
+            items={candidateResult.embodied.breakdown}
+            onExplain={onExplain}
+          />
+          <BreakdownChart
+            title="Driftutsläpp per år"
+            items={candidateResult.operational.breakdown}
+            onExplain={onExplain}
+          />
+          <BreakdownChart
+            title="Mobilitet per år"
+            items={candidateResult.mobility.breakdown}
+            onExplain={onExplain}
+          />
+        </div>
+      </section>
+
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Drivare</p>
+          <h3>Utsläppsdrivare och rekommenderade åtgärder</h3>
+        </div>
+        <div className="report-dual-grid">
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Beslutsstöd</p>
+              <h3>Största utsläppsdrivare</h3>
+            </div>
+            <ul className="insight-list">
+              {candidateResult.topDrivers.map((driver) => (
+                <li key={driver.key}>
+                  <strong className="inline-with-action">
+                    <span>
+                      {driver.label} • {formatNumber(driver.impactKgCo2e)} kg CO2e
+                    </span>
+                    {driver.traceKey && onExplain ? (
+                      <ExplainButton
+                        label={driver.label}
+                        onClick={() => onExplain(driver.traceKey ?? "totals")}
+                      />
+                    ) : null}
+                  </strong>
+                  <span>{driver.explanation}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Åtgärder</p>
+              <h3>Rekommenderade nästa steg</h3>
+            </div>
+            <ul className="insight-list">
+              {candidateResult.recommendedActions.map((action) => (
+                <li key={action.id}>
+                  <strong className="inline-with-action">
+                    <span>
+                      {action.title} • {action.expectedImpact}
+                    </span>
+                    {action.traceKey && onExplain ? (
+                      <ExplainButton
+                        label={action.title}
+                        onClick={() => onExplain(action.traceKey ?? "totals")}
+                      />
+                    ) : null}
+                  </strong>
+                  <span>{action.description}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        {candidateResult.baselineExisting && candidateResult.baselineComparison ? (
+          <section className="report-card">
             <div className="section-heading">
               <p className="eyebrow">Före och efter</p>
               <h3>Basfall mot intervention</h3>
@@ -1011,202 +1587,115 @@ function ResultMatrix({
                 <strong className="inline-with-action">
                   <span>Befintligt basfall</span>
                   {onExplain ? (
-                    <ExplainButton label="Befintligt basfall" onClick={() => onExplain("baseline.existing")} />
+                    <ExplainButton
+                      label="Befintligt basfall"
+                      onClick={() => onExplain("baseline.existing")}
+                    />
                   ) : null}
                 </strong>
                 <span>
-                  Total {formatNumber(result.baselineExisting.totalKgCo2e)} kg CO2e
+                  Total {formatNumber(candidateResult.baselineExisting.totalKgCo2e)} kg CO2e
                 </span>
                 <span>
-                  {formatNumber(result.baselineExisting.annualOperationalKgCo2e)} kg CO2e/år drift
+                  {formatNumber(candidateResult.baselineExisting.annualOperationalKgCo2e)} kg CO2e/år drift
                 </span>
               </article>
               <article className="comparison-card">
                 <strong className="inline-with-action">
                   <span>Delta mot basfall</span>
                   {onExplain ? (
-                    <ExplainButton label="Delta mot basfall" onClick={() => onExplain("baseline.delta")} />
+                    <ExplainButton
+                      label="Delta mot basfall"
+                      onClick={() => onExplain("baseline.delta")}
+                    />
                   ) : null}
                 </strong>
                 <span>
-                  {result.baselineComparison.totalDeltaKgCo2e > 0 ? "+" : ""}
-                  {formatNumber(result.baselineComparison.totalDeltaKgCo2e)} kg CO2e totalt
+                  {candidateResult.baselineComparison.totalDeltaKgCo2e > 0 ? "+" : ""}
+                  {formatNumber(candidateResult.baselineComparison.totalDeltaKgCo2e)} kg CO2e totalt
                 </span>
                 <span>
-                  {result.baselineComparison.annualOperationalDeltaKgCo2e > 0 ? "+" : ""}
-                  {formatNumber(result.baselineComparison.annualOperationalDeltaKgCo2e)} kg CO2e/år drift
+                  {candidateResult.baselineComparison.annualOperationalDeltaKgCo2e > 0 ? "+" : ""}
+                  {formatNumber(candidateResult.baselineComparison.annualOperationalDeltaKgCo2e)} kg CO2e/år drift
                 </span>
                 <span>
-                  {result.baselineComparison.lifetimeMobilityDeltaKgCo2e > 0 ? "+" : ""}
-                  {formatNumber(result.baselineComparison.lifetimeMobilityDeltaKgCo2e)} kg CO2e mobilitet
+                  {candidateResult.baselineComparison.lifetimeMobilityDeltaKgCo2e > 0 ? "+" : ""}
+                  {formatNumber(candidateResult.baselineComparison.lifetimeMobilityDeltaKgCo2e)} kg CO2e mobilitet
                 </span>
-                {result.baselineComparison.avoidedNewbuildKgCo2e !== undefined ? (
-                  <span>
-                    Undviken nybyggnadsekvivalent {formatNumber(result.baselineComparison.avoidedNewbuildKgCo2e)} kg CO2e
-                  </span>
-                ) : null}
               </article>
             </div>
           </section>
         ) : null}
       </section>
 
-      <section className="details-grid">
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Metodstatus</p>
-            <h3>Verifierbarhet i den här körningen</h3>
-          </div>
-          <ul className="insight-list">
-            <li>
-              <strong>{methodStatus.standard} poster med standardstöd</strong>
-              <span>Direkt vägledda av standard eller normerad metod via myndighet eller standardram.</span>
-            </li>
-            <li>
-              <strong>{methodStatus.official} poster med officiell statistik eller leverantörsdata</strong>
-              <span>Underbyggda av statistik, myndighetsdata eller lokala emissionsvärden.</span>
-            </li>
-            <li>
-              <strong>{methodStatus.proxy} poster med schablon eller proxy</strong>
-              <span>Visas öppet som screeningantaganden och ska användas med försiktighet.</span>
-            </li>
-          </ul>
-        </section>
+      <section className="result-section">
+        <div className="section-heading">
+          <p className="eyebrow">Metod</p>
+          <h3>Metodstatus, antaganden och källspår</h3>
+        </div>
+        <div className="report-dual-grid">
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Metodstatus</p>
+              <h3>Verifierbarhet i den här körningen</h3>
+            </div>
+            <ul className="insight-list">
+              <li>
+                <strong>{methodStatus.standard} poster med standardstöd</strong>
+                <span>Direkt vägledda av standard eller normerad metod via myndighet eller standardram.</span>
+              </li>
+              <li>
+                <strong>{methodStatus.official} poster med officiell statistik eller leverantörsdata</strong>
+                <span>Underbyggda av statistik, myndighetsdata eller lokala emissionsvärden.</span>
+              </li>
+              <li>
+                <strong>{methodStatus.proxy} poster med schablon eller proxy</strong>
+                <span>Visas öppet som screeningantaganden och ska användas med försiktighet.</span>
+              </li>
+            </ul>
+          </section>
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Antaganden</p>
+              <h3>Metod och källor</h3>
+            </div>
+            <dl className="assumption-list">
+              {candidateResult.assumptions.map((assumption) => (
+                <div key={assumption.label}>
+                  <dt>{assumption.label}</dt>
+                  <dd>{assumption.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
 
-        <section className="panel panel-soft">
+        <InputCatalog result={candidateResult} />
+
+        <section className="report-card">
           <div className="section-heading">
-            <p className="eyebrow">Benchmark</p>
-            <h3>Normalvärden och målvärden</h3>
+            <p className="eyebrow">Källor</p>
+            <h3>Källor i den valda körningen</h3>
           </div>
-          <div className="comparison-list">
-            {[...result.vsBenchmark, ...result.vsTarget].map((item) => (
-              <article key={`${item.referenceLabel}-${item.metric}`} className="comparison-card">
-                <strong className="inline-with-action">
-                  <span>
-                    {item.referenceLabel} • {item.label}
-                  </span>
-                  {item.traceKey && onExplain ? (
-                    <ExplainButton label={`${item.referenceLabel} ${item.label}`} onClick={() => onExplain(item.traceKey ?? "perM2")} />
-                  ) : null}
-                </strong>
+          <ul className="source-list">
+            {candidateResult.sources.map((source) => (
+              <li key={source.id}>
+                <a href={source.url} target="_blank" rel="noreferrer">
+                  {source.title}
+                </a>
                 <span>
-                  Utfall {formatNumber(item.actualValue)} mot referens {formatNumber(item.referenceValue)}
+                  {source.publisher} • {source.license}
+                  {source.updatedAt ? ` • ${source.updatedAt}` : ""}
                 </span>
-                <span
-                  className={`comparison-status comparison-status-${
-                    item.status === "below" ? "good" : item.status === "above" ? "warn" : "neutral"
-                  }`}
-                >
-                  {item.delta > 0 ? "+" : ""}
-                  {formatNumber(item.delta)} ({item.deltaPct}%)
-                </span>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Beslutsstöd</p>
-            <h3>Största utsläppsdrivare</h3>
-          </div>
-          <ul className="insight-list">
-            {result.topDrivers.map((driver) => (
-              <li key={driver.key}>
-                <strong className="inline-with-action">
-                  <span>
-                    {driver.label} • {formatNumber(driver.impactKgCo2e)} kg CO2e
-                  </span>
-                  {driver.traceKey && onExplain ? (
-                    <ExplainButton label={driver.label} onClick={() => onExplain(driver.traceKey ?? "totals")} />
-                  ) : null}
-                </strong>
-                <span>{driver.explanation}</span>
+                {source.note ? <p className="microcopy">{source.note}</p> : null}
               </li>
             ))}
           </ul>
         </section>
-
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Åtgärder</p>
-            <h3>Rekommenderade nästa steg</h3>
-          </div>
-          <ul className="insight-list">
-            {result.recommendedActions.map((action) => (
-              <li key={action.id}>
-                <strong className="inline-with-action">
-                  <span>
-                    {action.title} • {action.expectedImpact}
-                  </span>
-                  {action.traceKey && onExplain ? (
-                    <ExplainButton label={action.title} onClick={() => onExplain(action.traceKey ?? "totals")} />
-                  ) : null}
-                </strong>
-                <span>{action.description}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Antaganden</p>
-            <h3>Metod och källor</h3>
-          </div>
-          <dl className="assumption-list">
-            {result.assumptions.map((assumption) => (
-              <div key={assumption.label}>
-                <dt>{assumption.label}</dt>
-                <dd>{assumption.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
       </section>
 
-      <InputCatalog result={result} />
-
-      {comparison ? (
-        <section className="panel panel-soft">
-          <div className="section-heading">
-            <p className="eyebrow">Scenariojämförelse</p>
-            <h3>Delta mellan alternativ</h3>
-          </div>
-          <div className="comparison-list">
-            {comparison.metrics.map((metric) => (
-              <article key={metric.metric} className="comparison-card">
-                <strong>{metric.metric}</strong>
-                <span>
-                  Bas {formatNumber(metric.baseValue)} → Kandidat {formatNumber(metric.candidateValue)}
-                </span>
-                <span>{metric.delta > 0 ? "+" : ""}{formatNumber(metric.delta)} ({metric.deltaPct}%)</span>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="details-grid">
-        <BreakdownChart
-          title="Embodied klimatpåverkan"
-          items={result.embodied.breakdown}
-          onExplain={onExplain}
-        />
-        <BreakdownChart
-          title="Driftutsläpp per år"
-          items={result.operational.breakdown}
-          onExplain={onExplain}
-        />
-        <BreakdownChart
-          title="Mobilitet per år"
-          items={result.mobility.breakdown}
-          onExplain={onExplain}
-        />
-      </section>
-
-      {result.byPlanObject?.length ? <GeoJsonMap planObjects={result.byPlanObject} /> : null}
-    </>
+      {candidateResult.byPlanObject?.length ? <GeoJsonMap planObjects={candidateResult.byPlanObject} /> : null}
+    </section>
   );
 }
 
@@ -1225,12 +1714,15 @@ function ScenarioTable({ project }: { project: Project | null }) {
         {project.scenarios.map((scenario) => (
           <article key={scenario.id} className="scenario-row">
             <strong>{scenario.name}</strong>
-            <span>{scenario.mode === "plan" ? "Planobjekt" : "Snabbkalkyl"}</span>
+            <span>
+              {scenario.mode === "plan" ? "Planobjekt" : "Snabbkalkyl"} • {scenario.runs?.length ?? 0} körningar
+            </span>
             <span>
               {scenario.latestResult
                 ? `${formatNumber(scenario.latestResult.totals.value)} kg CO2e`
                 : "Ej beräknad"}
             </span>
+            <span>{scenario.lastCalculatedAt ? formatRunTimestamp(scenario.lastCalculatedAt) : "Inte körd"}</span>
           </article>
         ))}
       </div>
@@ -1238,7 +1730,623 @@ function ScenarioTable({ project }: { project: Project | null }) {
   );
 }
 
+interface ScenarioMatrixDraft {
+  id: string;
+  name: string;
+  form: FormState;
+}
+
+function ScenarioMatrixEditor({
+  scenario,
+  onImportRows,
+  disabled
+}: {
+  scenario: Scenario | null;
+  onImportRows: (rows: Array<Record<string, string | number>>) => Promise<number>;
+  disabled?: boolean;
+}) {
+  const [draftRows, setDraftRows] = useState<ScenarioMatrixDraft[]>([]);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!scenario) {
+      setDraftRows([]);
+      return;
+    }
+
+    const seedForm = scenario.quickInput ? payloadToForm(scenario.quickInput) : createDraftForm();
+    setDraftRows([
+      {
+        id: `draft-${scenario.id}-1`,
+        name: `${scenario.name} 1`,
+        form: seedForm
+      }
+    ]);
+  }, [scenario?.id, scenario?.name, scenario?.mode]);
+
+  function updateDraftRow<K extends keyof FormState>(rowId: string, key: K, value: FormState[K]) {
+    setDraftRows((current) =>
+      current.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+
+        const nextForm = {
+          ...row.form,
+          [key]: value
+        };
+
+        return {
+          ...row,
+          form:
+            key === "buildingType"
+              ? applyBuildingTypePresetToForm(nextForm, value as FormState["buildingType"])
+              : nextForm
+        };
+      })
+    );
+  }
+
+  function updateDraftName(rowId: string, value: string) {
+    setDraftRows((current) =>
+      current.map((row) => (row.id === rowId ? { ...row, name: value } : row))
+    );
+  }
+
+  function addDraftRow() {
+    setDraftRows((current) => [
+      ...current,
+      {
+        id: `draft-${scenario?.id ?? "scenario"}-${current.length + 1}-${Date.now()}`,
+        name: `Byggnad ${current.length + 1}`,
+        form: createDraftForm()
+      }
+    ]);
+  }
+
+  function duplicateDraftRow(rowId: string) {
+    setDraftRows((current) => {
+      const match = current.find((row) => row.id === rowId);
+      if (!match) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          id: `draft-${scenario?.id ?? "scenario"}-${current.length + 1}-${Date.now()}`,
+          name: `${match.name} kopia`,
+          form: { ...match.form }
+        }
+      ];
+    });
+  }
+
+  function removeDraftRow(rowId: string) {
+    setDraftRows((current) => current.filter((row) => row.id !== rowId));
+  }
+
+  async function handleSaveDraftRows() {
+    if (!scenario) {
+      return;
+    }
+
+    setDraftError(null);
+
+    try {
+      const rows = draftRows.map((row) => {
+        const payload = buildPayload(row.form);
+        const rawRow = {
+          id: row.id,
+          name: row.name,
+          objectType: "byggnad",
+          buildingType: payload.buildingType,
+          grossFloorAreaM2: payload.grossFloorAreaM2,
+          buildYear: payload.buildYear,
+          frameMaterial: payload.frameMaterial,
+          energyStandard: payload.energyStandard,
+          heatingType: payload.heatingType,
+          buildingForm: payload.buildingForm,
+          urbanContext: payload.urbanContext,
+          residents: payload.estimatedResidents,
+          workers: payload.estimatedWorkers,
+          siteAreaM2: payload.siteAreaM2,
+          floorsAboveGround: payload.floorsAboveGround,
+          buildingFootprintM2: payload.buildingFootprintM2,
+          glazingRatioPct: payload.glazingRatioPct,
+          parkingSpaces: payload.parkingSpaces,
+          parkingStructureType: payload.parkingStructureType,
+          parkingGarageFloors: payload.parkingGarageFloors,
+          landType: payload.landType,
+          groundCondition: payload.groundCondition,
+          foundationType: payload.foundationType,
+          lat: payload.siteLocation?.lat,
+          lon: payload.siteLocation?.lon,
+          distanceToTransitStopM: payload.transitOverrides?.distanceToTransitStopM,
+          distanceToRailStationM: payload.transitOverrides?.distanceToRailStationM,
+          departuresPerHour: payload.transitOverrides?.departuresPerHour,
+          interventionType: payload.interventionType,
+          existingGrossFloorAreaM2: payload.existingBuilding?.grossFloorAreaM2,
+          existingBuildYear: payload.existingBuilding?.buildYear,
+          existingFrameMaterial: payload.existingBuilding?.frameMaterial,
+          existingEnergyStandard: payload.existingBuilding?.energyStandard,
+          existingSpecificEnergyUseKwhM2Year: payload.existingBuilding?.specificEnergyUseKwhM2Year,
+          retainedStructureSharePct: payload.retainedStructureSharePct,
+          addedGrossFloorAreaM2: payload.addedGrossFloorAreaM2,
+          addedFloors: payload.addedFloors,
+          retrofitDepth: payload.retrofitDepth
+        };
+        return Object.fromEntries(
+          Object.entries(rawRow).filter(([, value]) => value !== undefined)
+        ) as Record<string, string | number>;
+      });
+
+      setIsSaving(true);
+      await onImportRows(rows);
+      setDraftRows([
+        {
+          id: `draft-${scenario.id}-1`,
+          name: `${scenario.name} 1`,
+          form: createDraftForm()
+        }
+      ]);
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "Tabellen kunde inte sparas.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (!scenario) {
+    return null;
+  }
+
+  return (
+    <section className="report-card matrix-card">
+      <div className="section-heading">
+        <p className="eyebrow">Tabellinmatning</p>
+        <h3>Flera byggnader i samma scenario</h3>
+      </div>
+      <p className="microcopy">
+        Varje kolumn blir ett eget planobjekt i scenariot. Det passar när ett projekt har flera byggnader med olika förutsättningar.
+      </p>
+
+      <div className="matrix-toolbar">
+        <button type="button" className="ghost-button" onClick={addDraftRow} disabled={disabled}>
+          Lägg till byggnad
+        </button>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => draftRows[0] && duplicateDraftRow(draftRows[0].id)}
+          disabled={disabled || draftRows.length === 0}
+        >
+          Duplicera första
+        </button>
+        <button
+          type="button"
+          className="submit-button"
+          onClick={handleSaveDraftRows}
+          disabled={disabled || isSaving || draftRows.length === 0}
+        >
+          {isSaving ? "Sparar tabell..." : "Importera till scenario"}
+        </button>
+      </div>
+
+      {draftError ? (
+        <p className="form-error" role="alert">
+          {draftError}
+        </p>
+      ) : null}
+
+      <div className="matrix-scroll">
+        <table className="matrix-table">
+          <thead>
+            <tr>
+              <th>Fält</th>
+              {draftRows.map((row, index) => (
+                <th key={row.id}>
+                  <div className="matrix-column-head">
+                    <input
+                      value={row.name}
+                      onChange={(event) => updateDraftName(row.id, event.target.value)}
+                      aria-label={`Namn för byggnad ${index + 1}`}
+                      placeholder={`Byggnad ${index + 1}`}
+                      disabled={disabled}
+                    />
+                    <div className="matrix-column-actions">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => duplicateDraftRow(row.id)}
+                        disabled={disabled}
+                      >
+                        Kopiera
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => removeDraftRow(row.id)}
+                        disabled={disabled || draftRows.length === 1}
+                      >
+                        Ta bort
+                      </button>
+                    </div>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              {
+                label: "Byggnadstyp",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.buildingType}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "buildingType", event.target.value as FormState["buildingType"])
+                    }
+                    disabled={disabled}
+                  >
+                    {BUILDING_TYPES.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.buildingType[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "BTA (m2)",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.grossFloorAreaM2}
+                    onChange={(event) => updateDraftRow(row.id, "grossFloorAreaM2", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Byggår",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={row.form.buildYear}
+                    onChange={(event) => updateDraftRow(row.id, "buildYear", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Stommaterial",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.frameMaterial}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "frameMaterial", event.target.value as FormState["frameMaterial"])
+                    }
+                    disabled={disabled}
+                  >
+                    {FRAME_MATERIALS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.frameMaterial[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Energistandard",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.energyStandard}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "energyStandard", event.target.value as FormState["energyStandard"])
+                    }
+                    disabled={disabled}
+                  >
+                    {ENERGY_STANDARDS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.energyStandard[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Uppvärmning",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.heatingType}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "heatingType", event.target.value as FormState["heatingType"])
+                    }
+                    disabled={disabled}
+                  >
+                    {HEATING_TYPES.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.heatingType[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Byggnadsform",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.buildingForm ?? "normal"}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "buildingForm", event.target.value as FormState["buildingForm"])
+                    }
+                    disabled={disabled}
+                  >
+                    {BUILDING_FORMS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.buildingForm[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Lägesprofil",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.urbanContext ?? "urban"}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "urbanContext", event.target.value as FormState["urbanContext"])
+                    }
+                    disabled={disabled}
+                  >
+                    {URBAN_CONTEXTS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.urbanContext[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Latitud",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.siteLat}
+                    onChange={(event) => updateDraftRow(row.id, "siteLat", event.target.value)}
+                    disabled={disabled}
+                    placeholder="Valfritt"
+                  />
+                )
+              },
+              {
+                label: "Longitud",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.siteLon}
+                    onChange={(event) => updateDraftRow(row.id, "siteLon", event.target.value)}
+                    disabled={disabled}
+                    placeholder="Valfritt"
+                  />
+                )
+              },
+              {
+                label: "Våningar",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={row.form.floorsAboveGround}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "floorsAboveGround", event.target.value)
+                    }
+                    disabled={disabled}
+                    placeholder="Default"
+                  />
+                )
+              },
+              {
+                label: "Fotavtryck (m2)",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.buildingFootprintM2}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "buildingFootprintM2", event.target.value)
+                    }
+                    disabled={disabled}
+                    placeholder="Härleds annars"
+                  />
+                )
+              },
+              {
+                label: "Glasandel (%)",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.glazingRatioPct}
+                    onChange={(event) => updateDraftRow(row.id, "glazingRatioPct", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Boende",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={row.form.estimatedResidents}
+                    onChange={(event) => updateDraftRow(row.id, "estimatedResidents", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Arbetande",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={row.form.estimatedWorkers}
+                    onChange={(event) => updateDraftRow(row.id, "estimatedWorkers", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+          {
+            label: "Parkering",
+            render: (row: ScenarioMatrixDraft) => (
+              <input
+                type="number"
+                    inputMode="numeric"
+                    value={row.form.parkingSpaces}
+                    onChange={(event) => updateDraftRow(row.id, "parkingSpaces", event.target.value)}
+                  disabled={disabled}
+                />
+              )
+            },
+              {
+                label: "Parkeringslösning",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.parkingStructureType ?? "none"}
+                    onChange={(event) => {
+                      const nextValue = event.target.value as FormState["parkingStructureType"];
+                      updateDraftRow(row.id, "parkingStructureType", nextValue);
+                      if (nextValue === "none") {
+                        updateDraftRow(row.id, "parkingGarageFloors", "");
+                      }
+                    }}
+                    disabled={disabled}
+                  >
+                    {PARKING_STRUCTURE_TYPES.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.parkingStructureType[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Garagevåningar",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={row.form.parkingGarageFloors}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "parkingGarageFloors", event.target.value)
+                    }
+                    disabled={disabled || row.form.parkingStructureType === "none"}
+                    placeholder="1"
+                  />
+                )
+              },
+              {
+                label: "Platsyta (m2)",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.siteAreaM2}
+                    onChange={(event) => updateDraftRow(row.id, "siteAreaM2", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Markförhållande",
+                render: (row: ScenarioMatrixDraft) => (
+                  <select
+                    value={row.form.groundCondition ?? "normal_mark"}
+                    onChange={(event) =>
+                      updateDraftRow(
+                        row.id,
+                        "groundCondition",
+                        event.target.value as FormState["groundCondition"]
+                      )
+                    }
+                    disabled={disabled}
+                  >
+                    {GROUND_CONDITIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.groundCondition[option]}
+                      </option>
+                    ))}
+                  </select>
+                )
+              },
+              {
+                label: "Hållplatsavstånd",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.distanceToTransitStopM}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "distanceToTransitStopM", event.target.value)
+                    }
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Spårstationsavstånd",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.distanceToRailStationM}
+                    onChange={(event) =>
+                      updateDraftRow(row.id, "distanceToRailStationM", event.target.value)
+                    }
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Avgångar/timme",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.departuresPerHour}
+                    onChange={(event) => updateDraftRow(row.id, "departuresPerHour", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              }
+            ].map((field) => (
+              <tr key={field.label}>
+                <th>{field.label}</th>
+                {draftRows.map((row) => (
+                  <td key={`${row.id}-${field.label}`}>{field.render(row)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
+  const [route, setRoute] = useState<AppRoute>(() =>
+    parseAppRoute(window.location.pathname, window.location.search)
+  );
   const [dataSources, setDataSources] = useState<DataSourcesResponse | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [allBenchmarkProfiles, setAllBenchmarkProfiles] = useState<BenchmarkProfile[]>([]);
@@ -1264,6 +2372,17 @@ export default function App() {
     useState<ComparisonMetric>("perM2");
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<string[]>([]);
   const [selectedStandardIds, setSelectedStandardIds] = useState<string[]>([]);
+  const [selectedBaseRunId, setSelectedBaseRunId] = useState("");
+  const [selectedCandidateRunId, setSelectedCandidateRunId] = useState("");
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(parseAppRoute(window.location.pathname, window.location.search));
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     Promise.all([fetchDataSources(), fetchWorkspace()])
@@ -1297,6 +2416,23 @@ export default function App() {
     currentProject?.scenarios.find((scenario) => scenario.id === selectedScenarioId) ??
     currentProject?.scenarios[0] ??
     null;
+  const analysisContext = useMemo(() => {
+    if (route.kind !== "analysis") {
+      return null;
+    }
+
+    for (const project of workspace?.projects ?? []) {
+      const scenario = project.scenarios.find((entry) => entry.id === route.scenarioId);
+      if (scenario) {
+        return { project, scenario };
+      }
+    }
+
+    return null;
+  }, [route, workspace?.projects]);
+  const analysisSelectedRun = analysisContext?.scenario
+    ? getActiveScenarioRun(analysisContext.scenario, route.kind === "analysis" ? route.runId : undefined)
+    : null;
 
   useEffect(() => {
     if (workspace?.benchmarkProfiles?.length) {
@@ -1322,6 +2458,14 @@ export default function App() {
     if (currentScenario) {
       setScenarioForm(payloadToForm(currentScenario.quickInput));
       setScenarioResult(currentScenario.latestResult ?? null);
+      const scenarioRuns = currentScenario.runs ?? [];
+      const latestRun = scenarioRuns[scenarioRuns.length - 1];
+      const previousRun =
+        scenarioRuns.length > 1
+          ? scenarioRuns[scenarioRuns.length - 2]
+          : scenarioRuns[0];
+      setSelectedCandidateRunId(latestRun?.id ?? "");
+      setSelectedBaseRunId(previousRun?.id ?? latestRun?.id ?? "");
     }
 
     if (currentProject && currentProject.scenarios.length >= 2) {
@@ -1338,18 +2482,46 @@ export default function App() {
     return response;
   }
 
+  function navigateTo(pathname: string, replace = false) {
+    const url = new URL(window.location.href);
+    url.pathname = pathname;
+    url.search = "";
+    if (replace) {
+      window.history.replaceState({}, "", url.toString());
+    } else {
+      window.history.pushState({}, "", url.toString());
+    }
+    setRoute(parseAppRoute(window.location.pathname, window.location.search));
+  }
+
+  function openAnalysis(scenarioId: string, runId?: string) {
+    navigateTo(buildAnalysisPath(scenarioId, runId));
+  }
+
   function updateQuickForm<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setQuickForm((current) => ({
-      ...current,
-      [key]: value
-    }));
+    setQuickForm((current) => {
+      const next = {
+        ...current,
+        [key]: value
+      };
+
+      return key === "buildingType"
+        ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
+        : next;
+    });
   }
 
   function updateScenarioForm<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setScenarioForm((current) => ({
-      ...current,
-      [key]: value
-    }));
+    setScenarioForm((current) => {
+      const next = {
+        ...current,
+        [key]: value
+      };
+
+      return key === "buildingType"
+        ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
+        : next;
+    });
   }
 
   function openExplanation(result: CalculationResult | null, traceKey: string) {
@@ -1439,18 +2611,25 @@ export default function App() {
     }
   }
 
-  async function handleDuplicateScenario() {
+  async function duplicateScenarioById(scenarioId: string) {
     setWorkspaceError(null);
 
     try {
-      if (!currentProject || !currentScenario) {
+      if (!currentProject) {
         throw new Error("Välj ett scenario att duplicera.");
+      }
+
+      const sourceScenario =
+        currentProject.scenarios.find((scenario) => scenario.id === scenarioId) ?? currentScenario;
+
+      if (!sourceScenario) {
+        throw new Error("Scenariot hittades inte.");
       }
 
       const duplicate = await duplicateScenarioApi(
         currentProject.id,
-        currentScenario.id,
-        `${currentScenario.name} alternativ`
+        sourceScenario.id,
+        `${sourceScenario.name} alternativ`
       );
       await refreshWorkspace(currentProject.organizationId);
       setSelectedScenarioId(duplicate.id);
@@ -1459,6 +2638,14 @@ export default function App() {
         error instanceof Error ? error.message : "Scenariot kunde inte dupliceras."
       );
     }
+  }
+
+  async function handleDuplicateScenario() {
+    if (!currentScenario) {
+      return;
+    }
+
+    await duplicateScenarioById(currentScenario.id);
   }
 
   async function handleQuickCalculate(event: React.FormEvent<HTMLFormElement>) {
@@ -1546,6 +2733,24 @@ export default function App() {
     }
   }
 
+  async function handleMatrixImportRows(rows: Array<Record<string, string | number>>) {
+    if (!currentScenario) {
+      throw new Error("Välj ett scenario före tabellimport.");
+    }
+
+    const response = await importTabularApi(currentScenario.id, {
+      format: "json",
+      rows
+    });
+
+    const calculation = await calculateScenarioApi(currentScenario.id);
+    startTransition(() => {
+      setScenarioResult(calculation.result);
+    });
+    await refreshWorkspace(currentProject?.organizationId ?? selectedOrganizationId);
+    return response.importedCount;
+  }
+
   function renderCalculationForm(
     form: FormState,
     update: <K extends keyof FormState>(key: K, value: FormState[K]) => void,
@@ -1568,6 +2773,7 @@ export default function App() {
               </option>
             ))}
           </select>
+          <span className="microcopy">Typvalet laddar rimliga startvärden för form, våningar, läge och parkering.</span>
         </label>
 
         <label>
@@ -1635,6 +2841,38 @@ export default function App() {
             {HEATING_TYPES.map((option) => (
               <option key={option} value={option}>
                 {LABELS.heatingType[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Byggnadsform
+          <select
+            value={form.buildingForm ?? "normal"}
+            onChange={(event) =>
+              update("buildingForm", event.target.value as FormState["buildingForm"])
+            }
+          >
+            {BUILDING_FORMS.map((option) => (
+              <option key={option} value={option}>
+                {LABELS.buildingForm[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Lägesprofil
+          <select
+            value={form.urbanContext ?? "urban"}
+            onChange={(event) =>
+              update("urbanContext", event.target.value as FormState["urbanContext"])
+            }
+          >
+            {URBAN_CONTEXTS.map((option) => (
+              <option key={option} value={option}>
+                {LABELS.urbanContext[option]}
               </option>
             ))}
           </select>
@@ -1956,6 +3194,22 @@ export default function App() {
                   </select>
                   <span className="microcopy">Justerar grundläggningsposten i embodied-delen.</span>
                 </label>
+                <label>
+                  Markförhållande
+                  <select
+                    value={form.groundCondition}
+                    onChange={(event) =>
+                      update("groundCondition", event.target.value as FormState["groundCondition"])
+                    }
+                  >
+                    {GROUND_CONDITIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.groundCondition[option]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="microcopy">Mjuk lera och gyttja höjer ofta grundläggningsinsatsen.</span>
+                </label>
               </div>
             </section>
 
@@ -1997,6 +3251,39 @@ export default function App() {
                     placeholder="Exempel: 30"
                   />
                   <span className="microcopy">Påverkar både parkeringsposten och en försiktig mobilitetsjustering.</span>
+                </label>
+                <label>
+                  Parkeringslösning
+                  <select
+                    value={form.parkingStructureType}
+                    onChange={(event) => {
+                      const nextValue = event.target.value as FormState["parkingStructureType"];
+                      update("parkingStructureType", nextValue);
+                      if (nextValue === "none") {
+                        update("parkingGarageFloors", "");
+                      }
+                    }}
+                  >
+                    {PARKING_STRUCTURE_TYPES.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.parkingStructureType[option]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="microcopy">Garage ger ofta en större klimatpåverkan än markparkering.</span>
+                </label>
+                <label>
+                  Garagevåningar
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={form.parkingGarageFloors}
+                    onChange={(event) => update("parkingGarageFloors", event.target.value)}
+                    placeholder="1"
+                    disabled={form.parkingStructureType === "none"}
+                  />
+                  <span className="microcopy">Används när garage byggs ovan eller under mark.</span>
                 </label>
                 <label>
                   Avstånd till hållplats (m)
@@ -2079,213 +3366,238 @@ export default function App() {
     );
   }
 
+  function handleAnalysisRunChange(runId: string) {
+    if (route.kind !== "analysis" || !analysisContext) {
+      return;
+    }
+
+    setActiveExplanation(null);
+    navigateTo(buildAnalysisPath(analysisContext.scenario.id, runId), true);
+  }
+
+  if (route.kind === "analysis") {
+    return (
+      <div className="app-shell analysis-shell">
+        <AnalysisPage
+          project={analysisContext?.project ?? null}
+          scenario={analysisContext?.scenario ?? null}
+          dataSources={dataSources}
+          benchmarkProfiles={allBenchmarkProfiles}
+          standardProfiles={dataSources?.standardProfiles ?? []}
+          selectedBenchmarkIds={selectedBenchmarkIds}
+          selectedStandardIds={selectedStandardIds}
+          selectedMetric={selectedComparisonMetric}
+          selectedRunId={route.runId}
+          onRunChange={handleAnalysisRunChange}
+          onMetricChange={setSelectedComparisonMetric}
+          onToggleBenchmark={toggleBenchmarkSelection}
+          onToggleStandard={toggleStandardSelection}
+          onExplain={(traceKey) => {
+            if (analysisSelectedRun) {
+              openExplanation(analysisSelectedRun.result, traceKey);
+            }
+          }}
+          onBack={() => navigateTo("/", true)}
+          onPrint={() => window.print()}
+        />
+
+        {workspaceError ? (
+          <p className="floating-error" role="alert">
+            {workspaceError}
+          </p>
+        ) : null}
+
+        <ExplanationDrawer explanation={activeExplanation} onClose={() => setActiveExplanation(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
-      <section className="city-ribbon" aria-label="Pilotidentitet">
-        <span>Stockholm-först pilot</span>
-        <span>Kommunal arbetsyta för tidiga klimatjämförelser</span>
-        <span>Öppna källor och verifierbara antaganden</span>
-      </section>
-
-      <header className="hero panel">
-        <div>
-          <div className="hero-meta">
-            <span>Planering</span>
-            <span>Bygg och mobilitet</span>
-            <span>Scenariojämförelse</span>
-          </div>
+      <section className="panel intro-strip">
+        <div className="intro-title">
           <p className="eyebrow">Kommunversion prototyp</p>
           <h1>Klimatberäknare för scenarier och planalternativ</h1>
           <p className="lede">
-            Bygg vidare från snabbkalkyl till kommunal arbetsyta med projekt, scenarier, benchmark,
-            målvärden, GeoJSON-import och scenariojämförelse.
-          </p>
-          <p className="microcopy">
-            Pilot för utvalda testanvändare. Resultaten är screeningnivå för tidiga beslut och ska
-            inte tolkas som full LCA, certifiering eller myndighetsbedömning.
+            Tät arbetsyta för projekt, scenarier och rapporterbara resultat med benchmark, körhistorik och utskriftsvänliga moduler.
           </p>
         </div>
-        <div className="hero-badge">
-          <span>Tidigt beslutsstöd</span>
-          <strong>Snabbkalkyl och kommunarbetsyta i samma vy</strong>
-          <p>Profil: {dataSources?.stockholmProfile ?? "Stockholm MVP 2026"}</p>
-          <ul className="hero-badge-list">
-            <li>Projekt och scenarier</li>
-            <li>Benchmark och standardprofiler</li>
-            <li>Källspår per beräkning</li>
-          </ul>
+        <div className="intro-meta-row">
+          <span>Profil: {dataSources?.stockholmProfile ?? "Stockholm MVP 2026"}</span>
+          <span>Screeningnivå för tidiga beslut</span>
+          <span>Öppna källor och verifierbara antaganden</span>
         </div>
-      </header>
-
-      <section className="panel panel-soft">
-        <div className="section-heading">
-          <p className="eyebrow">Pilotstatus</p>
-          <h2>Begränsad pilot med versionsstyrda källor</h2>
-        </div>
-        <p className="microcopy">
-          Piloten är avsedd för kommuner, planerare och projektteam som vill jämföra alternativ i
-          tidiga skeden. Källspår, antaganden och standardprofiler visas direkt i gränssnittet.
-        </p>
       </section>
 
-      <div className="workspace-layout">
-        <aside className="panel workspace-sidebar">
-          <div className="section-heading">
-            <p className="eyebrow">Organisation</p>
-            <h2>Kommunarbetsyta</h2>
-          </div>
+      <section className="panel workspace-panel">
+        <div className="section-heading">
+          <p className="eyebrow">Arbetsyta</p>
+          <h2>Projektinfo och scenarioeditor i full bredd</h2>
+        </div>
 
-          {workspace?.session ? (
-            <div className="session-card">
-              <strong>{workspace.session.organizationName}</strong>
-              <span>{workspace.session.email}</span>
+        <div className="workspace-card-grid">
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Organisation</p>
+              <h3>Session och kommunprofil</h3>
             </div>
-          ) : (
-            <form className="stacked-form" onSubmit={handleLogin}>
+            {workspace?.session ? (
+              <div className="session-card">
+                <strong>{workspace.session.organizationName}</strong>
+                <span>{workspace.session.email}</span>
+                <span>Aktiv organisation: {workspace.session.organizationId}</span>
+              </div>
+            ) : (
+              <form className="stacked-form" onSubmit={handleLogin}>
+                <label>
+                  E-post
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(event) => setLoginEmail(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Organisation
+                  <select
+                    value={selectedOrganizationId}
+                    onChange={(event) => setSelectedOrganizationId(event.target.value)}
+                  >
+                    {workspace?.organizations.map((organization) => (
+                      <option key={organization.id} value={organization.id}>
+                        {organization.name}
+                      </option>
+                    )) ?? <option value="stockholm-stad">Stockholms stad</option>}
+                  </select>
+                </label>
+                <button className="submit-button" type="submit">
+                  Öppna arbetsyta
+                </button>
+              </form>
+            )}
+            {currentBenchmark ? (
+              <section className="inline-panel">
+                <strong>{currentBenchmark.name}</strong>
+                <span>Normalvärde per m2: {formatNumber(currentBenchmark.normalPerM2KgCo2e)}</span>
+                <span>Målvärde per m2: {formatNumber(currentBenchmark.targetPerM2KgCo2e)}</span>
+                <span>{currentBenchmark.sourceLabel} • v{currentBenchmark.version}</span>
+              </section>
+            ) : null}
+          </section>
+
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Projekt</p>
+              <h3>Välj eller skapa projekt</h3>
+            </div>
+            <form className="stacked-form" onSubmit={handleCreateProject}>
               <label>
-                E-post
+                Nytt projekt
                 <input
-                  type="email"
-                  value={loginEmail}
-                  onChange={(event) => setLoginEmail(event.target.value)}
-                />
-              </label>
-              <label>
-                Organisation
-                <select
-                  value={selectedOrganizationId}
-                  onChange={(event) => setSelectedOrganizationId(event.target.value)}
-                >
-                  {workspace?.organizations.map((organization) => (
-                    <option key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </option>
-                  )) ?? <option value="stockholm-stad">Stockholms stad</option>}
-                </select>
-              </label>
-              <button className="submit-button" type="submit">
-                Öppna arbetsyta
-              </button>
-            </form>
-          )}
-
-          {currentBenchmark ? (
-            <section className="inline-panel">
-              <strong>{currentBenchmark.name}</strong>
-              <span>Normalvärde per m2: {formatNumber(currentBenchmark.normalPerM2KgCo2e)}</span>
-              <span>Målvärde per m2: {formatNumber(currentBenchmark.targetPerM2KgCo2e)}</span>
-              <span>{allBenchmarkProfiles.length} benchmarkprofiler tillgängliga i jämförelsevyn</span>
-              <span>{dataSources?.standardProfiles.length ?? 0} standardprofiler tillgängliga i jämförelsevyn</span>
-            </section>
-          ) : null}
-
-          <form className="stacked-form" onSubmit={handleCreateProject}>
-            <label>
-              Nytt projekt
-              <input
-                value={newProjectName}
-                onChange={(event) => setNewProjectName(event.target.value)}
-                placeholder="Exempel: Ny stadsdel 2040"
-              />
-            </label>
-            <button className="ghost-button" type="submit">
-              Skapa projekt
-            </button>
-          </form>
-
-          <div className="project-list">
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                className={`list-button ${
-                  currentProject?.id === project.id ? "list-button-active" : ""
-                }`}
-                onClick={() => {
-                  setSelectedProjectId(project.id);
-                  setComparison(null);
-                }}
-              >
-                <strong>{project.name}</strong>
-                <span>{project.scenarios.length} scenarier</span>
-              </button>
-            ))}
-          </div>
-
-          {currentProject ? (
-            <form className="stacked-form" onSubmit={handleCreateScenario}>
-              <label>
-                Nytt scenario i {currentProject.name}
-                <input
-                  value={newScenarioName}
-                  onChange={(event) => setNewScenarioName(event.target.value)}
-                  placeholder="Exempel: Tät struktur A"
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                  placeholder="Exempel: Ny stadsdel 2040"
                 />
               </label>
               <button className="ghost-button" type="submit">
-                Skapa scenario
+                Skapa projekt
               </button>
             </form>
-          ) : null}
-        </aside>
-
-        <section className="workspace-main">
-          <ScenarioTable project={currentProject} />
-
-          <section className="panel">
-            <div className="section-heading">
-              <p className="eyebrow">Scenarioeditor</p>
-              <h2>{currentScenario?.name ?? "Välj eller skapa ett scenario"}</h2>
+            <div className="project-list">
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`list-button ${
+                    currentProject?.id === project.id ? "list-button-active" : ""
+                  }`}
+                  onClick={() => {
+                    setSelectedProjectId(project.id);
+                    setComparison(null);
+                  }}
+                >
+                  <strong>{project.name}</strong>
+                  <span>{project.scenarios.length} scenarier</span>
+                </button>
+              ))}
             </div>
-            {currentScenario ? (
-              <>
-                <div className="toolbar-row">
-                  <span className="badge">
-                    {currentScenario.mode === "plan" ? "Planobjektläge" : "Snabbt scenario"}
-                  </span>
-                  <button type="button" className="ghost-button" onClick={handleDuplicateScenario}>
-                    Duplicera scenario
-                  </button>
-                  {scenarioResult ? (
-                    <>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => exportResultToCsv(`${currentScenario.name}.csv`, scenarioResult)}
-                      >
-                        Exportera CSV
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          exportResultToPng(`${currentScenario.name}.png`, scenarioResult, currentScenario.name)
-                        }
-                      >
-                        Exportera PNG
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-                {renderCalculationForm(
-                  scenarioForm,
-                  updateScenarioForm,
-                  handleScenarioCalculate,
-                  isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
-                  isScenarioSubmitting
-                )}
-              </>
-            ) : (
-              <div className="empty-state">
-                <strong>Skapa ett projekt och ett scenario för att börja.</strong>
-                <p>Scenarioflödet låter dig spara alternativ, importera planobjekt och jämföra mot målvärden.</p>
-              </div>
-            )}
           </section>
 
-          {currentScenario ? (
-            <section className="details-grid">
-              <section className="panel panel-soft">
+          <section className="report-card">
+            <div className="section-heading">
+              <p className="eyebrow">Scenarier</p>
+              <h3>Välj scenario och jämförelsemått</h3>
+            </div>
+            {currentProject ? (
+              <>
+                <form className="stacked-form" onSubmit={handleCreateScenario}>
+                  <label>
+                    Nytt scenario i {currentProject.name}
+                    <input
+                      value={newScenarioName}
+                      onChange={(event) => setNewScenarioName(event.target.value)}
+                      placeholder="Exempel: Tät struktur A"
+                    />
+                  </label>
+                  <button className="ghost-button" type="submit">
+                    Skapa scenario
+                  </button>
+                </form>
+                <div className="project-list">
+                  {currentProject.scenarios.map((scenario) => (
+                    <button
+                      key={scenario.id}
+                      type="button"
+                      className={`list-button ${
+                        currentScenario?.id === scenario.id ? "list-button-active" : ""
+                      }`}
+                      onClick={() => {
+                        setSelectedScenarioId(scenario.id);
+                        setComparison(null);
+                      }}
+                    >
+                      <strong>{scenario.name}</strong>
+                      <span>{scenario.runs?.length ?? 0} körningar</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="segmented-control" role="tablist" aria-label="Jämförelsemått">
+                  {COMPARISON_METRICS.map((metric) => (
+                    <button
+                      key={metric}
+                      type="button"
+                      className={`pill-button ${selectedComparisonMetric === metric ? "pill-button-active" : ""}`}
+                      onClick={() => setSelectedComparisonMetric(metric)}
+                    >
+                      {getMetricLabel(metric)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="microcopy">Skapa ett projekt för att börja bygga scenarier.</p>
+            )}
+          </section>
+        </div>
+
+        <ScenarioTable project={currentProject} />
+
+        <DecisionWorkbench
+          project={currentProject}
+          selectedMetric={selectedComparisonMetric}
+          activeScenarioId={currentScenario?.id}
+          onSelectScenario={(scenarioId) => {
+            setSelectedScenarioId(scenarioId);
+            setComparison(null);
+          }}
+          onDuplicateScenario={duplicateScenarioById}
+          onOpenAnalysis={openAnalysis}
+        />
+
+        {currentScenario ? (
+          <>
+            <section className="support-grid">
+              <section className="report-card">
                 <div className="section-heading">
                   <p className="eyebrow">Import</p>
                   <h3>GeoJSON eller CSV</h3>
@@ -2293,9 +3605,9 @@ export default function App() {
                 <p className="microcopy">
                   GeoJSON kräver geometri och egenskaper som `name`, `buildingType`,
                   `grossFloorAreaM2`, `buildYear`, `frameMaterial`, `energyStandard`, `heatingType`
-                  samt kan även ta platsdata, transitdata och ingreppsfält som `siteAreaM2`,
-                  `parkingSpaces`, `landType`, `foundationType`, `interventionType`,
-                  `existingGrossFloorAreaM2`, `retainedStructureSharePct`,
+                  samt kan även ta platsdata, formfaktor och lägesdata som `buildingForm`,
+                  `urbanContext`, `siteAreaM2`, `parkingSpaces`, `landType`, `foundationType`,
+                  `interventionType`, `existingGrossFloorAreaM2`, `retainedStructureSharePct`,
                   `addedGrossFloorAreaM2` och `retrofitDepth`.
                 </p>
                 <input type="file" accept=".json,.geojson,.csv" onChange={handleImportFile} />
@@ -2304,7 +3616,38 @@ export default function App() {
                 </p>
               </section>
 
-              <section className="panel panel-soft">
+              <section className="report-card">
+                <div className="section-heading">
+                  <p className="eyebrow">Benchmarkurval</p>
+                  <h3>Profiler för rapporten</h3>
+                </div>
+                <div className="benchmark-pills" aria-label="Benchmarkprofiler">
+                  {allBenchmarkProfiles.map((profile) => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      className={`pill-button ${selectedBenchmarkIds.includes(profile.id) ? "pill-button-active" : ""}`}
+                      onClick={() => toggleBenchmarkSelection(profile.id)}
+                    >
+                      {profile.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="benchmark-pills" aria-label="Standardprofiler">
+                  {(dataSources?.standardProfiles ?? []).map((profile) => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      className={`pill-button ${selectedStandardIds.includes(profile.id) ? "pill-button-active" : ""}`}
+                      onClick={() => toggleStandardSelection(profile.id)}
+                    >
+                      {profile.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="report-card">
                 <div className="section-heading">
                   <p className="eyebrow">Jämför</p>
                   <h3>Scenario mot scenario</h3>
@@ -2346,54 +3689,127 @@ export default function App() {
                 )}
               </section>
             </section>
-          ) : null}
 
-          {currentScenario?.planObjects.length ? (
-            <section className="panel panel-soft">
+            <section className="panel panel-form">
               <div className="section-heading">
-                <p className="eyebrow">Planobjekt</p>
-                <h3>Importerade objekt</h3>
+                <p className="eyebrow">Scenarioeditor</p>
+                <h2>{currentScenario.name}</h2>
               </div>
-              <div className="scenario-table">
-                {currentScenario.planObjects.map((planObject) => (
-                  <article key={planObject.id} className="scenario-row">
-                    <strong>{planObject.name}</strong>
-                    <span>{planObject.objectType}</span>
-                    <span>{formatNumber(planObject.grossFloorAreaM2)} m2</span>
-                  </article>
-                ))}
+              <div className="toolbar-row">
+                <span className="badge">
+                  {currentScenario.mode === "plan" ? "Planobjektläge" : "Snabbt scenario"}
+                </span>
+                <button type="button" className="ghost-button" onClick={handleDuplicateScenario}>
+                  Duplicera scenario
+                </button>
+                {scenarioResult ? (
+                  <>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => exportResultToCsv(`${currentScenario.name}.csv`, scenarioResult)}
+                    >
+                      Exportera CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() =>
+                        exportResultToPng(`${currentScenario.name}.png`, scenarioResult, currentScenario.name)
+                      }
+                    >
+                      Exportera PNG
+                    </button>
+                  </>
+                ) : null}
               </div>
+              <ScenarioMatrixEditor
+                scenario={currentScenario}
+                onImportRows={handleMatrixImportRows}
+                disabled={isScenarioSubmitting}
+              />
+              <Building3DViewer
+                scenario={currentScenario}
+                result={scenarioResult}
+                onExplain={(traceKey) => openExplanation(currentScenario.latestResult ?? scenarioResult, traceKey)}
+                onScenarioRefresh={() => refreshWorkspace(currentProject?.organizationId ?? selectedOrganizationId)}
+              />
+              {renderCalculationForm(
+                scenarioForm,
+                updateScenarioForm,
+                handleScenarioCalculate,
+                isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
+                isScenarioSubmitting
+              )}
             </section>
-          ) : null}
 
-          <ScenarioComparisonBoard
-            project={currentProject}
-            benchmarkProfiles={allBenchmarkProfiles}
-            standardProfiles={dataSources?.standardProfiles ?? []}
-            selectedBenchmarkIds={selectedBenchmarkIds}
-            selectedStandardIds={selectedStandardIds}
-            selectedMetric={selectedComparisonMetric}
-            focusScenarioId={currentScenario?.id}
-            onToggleBenchmark={toggleBenchmarkSelection}
-            onToggleStandard={toggleStandardSelection}
-            onMetricChange={setSelectedComparisonMetric}
-          />
+            {currentScenario.planObjects.length ? (
+              <section className="panel panel-soft">
+                <div className="section-heading">
+                  <p className="eyebrow">Planobjekt</p>
+                  <h3>Importerade objekt</h3>
+                </div>
+                <div className="scenario-table">
+                  {currentScenario.planObjects.map((planObject) => (
+                    <article key={planObject.id} className="scenario-row">
+                      <strong>{planObject.name}</strong>
+                      <span>{planObject.objectType}</span>
+                      <span>{formatNumber(planObject.grossFloorAreaM2)} m2</span>
+                      <span>{LABELS.buildingForm[planObject.quickInput.buildingForm ?? "normal"]}</span>
+                      <span>{LABELS.urbanContext[planObject.quickInput.urbanContext ?? "urban"]}</span>
+                      <span>{planObject.quickInput.interventionType ?? "nybyggnad"}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-          <ResultMatrix
-            title="Kommunalt scenarioresultat"
-            result={scenarioResult}
-            comparison={comparison}
-            onExplain={(traceKey) => openExplanation(scenarioResult, traceKey)}
-          />
-        </section>
-      </div>
+            <ResultMatrix
+              title="Kommunalt scenarioresultat"
+              scenario={currentScenario}
+              result={scenarioResult}
+              comparison={comparison}
+              dataSources={dataSources}
+              benchmarkProfiles={allBenchmarkProfiles}
+              standardProfiles={dataSources?.standardProfiles ?? []}
+              selectedBenchmarkIds={selectedBenchmarkIds}
+              selectedStandardIds={selectedStandardIds}
+              selectedMetric={selectedComparisonMetric}
+              baseRunId={selectedBaseRunId}
+              candidateRunId={selectedCandidateRunId}
+              onBaseRunChange={setSelectedBaseRunId}
+              onCandidateRunChange={setSelectedCandidateRunId}
+              onOpenAnalysis={openAnalysis}
+              onExplain={(traceKey) => openExplanation(currentScenario.latestResult ?? scenarioResult, traceKey)}
+            />
 
-      <section className="quick-layout">
-        <section className="panel panel-form">
-          <div className="section-heading">
-            <p className="eyebrow">Snabb byggnadskalkyl</p>
-            <h2>Direktläge för enskild byggnad</h2>
+            <ScenarioComparisonBoard
+              project={currentProject}
+              benchmarkProfiles={allBenchmarkProfiles}
+              standardProfiles={dataSources?.standardProfiles ?? []}
+              selectedBenchmarkIds={selectedBenchmarkIds}
+              selectedStandardIds={selectedStandardIds}
+              selectedMetric={selectedComparisonMetric}
+              focusScenarioId={currentScenario?.id}
+              onToggleBenchmark={toggleBenchmarkSelection}
+              onToggleStandard={toggleStandardSelection}
+              onMetricChange={setSelectedComparisonMetric}
+            />
+          </>
+        ) : (
+          <div className="empty-state">
+            <strong>Skapa ett projekt och ett scenario för att börja.</strong>
+            <p>Scenarioflödet låter dig spara alternativ, importera planobjekt och jämföra mot målvärden.</p>
           </div>
+        )}
+      </section>
+
+      <section className="panel secondary-workspace">
+        <div className="section-heading">
+          <p className="eyebrow">Snabbkalkyl</p>
+          <h2>Sekundärt direktläge för enskild byggnad</h2>
+        </div>
+        <section className="panel panel-form quick-panel">
           {renderCalculationForm(
             quickForm,
             updateQuickForm,
@@ -2407,17 +3823,20 @@ export default function App() {
             </p>
           ) : null}
         </section>
-
-        <section className="results-column">
-          <ResultMatrix
-            title="Resultat för snabbkalkyl"
-            result={quickResult}
-            onExplain={(traceKey) => openExplanation(quickResult, traceKey)}
-          />
-        </section>
+        <ResultMatrix
+          title="Resultat för snabbkalkyl"
+          result={quickResult}
+          dataSources={dataSources}
+          benchmarkProfiles={allBenchmarkProfiles}
+          standardProfiles={dataSources?.standardProfiles ?? []}
+          selectedBenchmarkIds={selectedBenchmarkIds}
+          selectedStandardIds={selectedStandardIds}
+          selectedMetric={selectedComparisonMetric}
+          onExplain={(traceKey) => openExplanation(quickResult, traceKey)}
+        />
       </section>
 
-      <section className="details-grid">
+      <section className="support-grid">
         <section className="panel panel-soft">
           <div className="section-heading">
             <p className="eyebrow">Källor</p>

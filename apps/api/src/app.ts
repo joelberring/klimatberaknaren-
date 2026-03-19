@@ -10,6 +10,7 @@ import {
   duplicateScenarioSchema,
   geoJsonImportSchema,
   projectSchema,
+  model3dImportSchema,
   scenarioCalculationSchema,
   scenarioSchema,
   sessionSchema,
@@ -34,6 +35,7 @@ import {
   getWorkspace,
   listProjects,
   saveScenarioResult,
+  saveScenarioModel3D,
   updateScenarioQuickInput
 } from "./services/workspaceStore";
 
@@ -204,7 +206,7 @@ export async function handleScenarioCalculateRequest(
   const benchmarkProfile = getBenchmarkProfile(match.project.organizationId);
   const targetProfile = getTargetProfile(match.project.organizationId);
   const result = calculateScenarioResult(match.scenario, benchmarkProfile, targetProfile);
-  const scenario = await saveScenarioResult(match.scenario.id, result);
+  const scenario = await saveScenarioResult(match.scenario.id, result, payload.quickInput);
 
   response.json({
     scenario,
@@ -258,6 +260,23 @@ export async function handleScenarioTabularImportRequest(
     importedCount: planObjects.length,
     scenario,
     warnings
+  });
+}
+
+export async function handleScenarioModel3DImportRequest(
+  request: express.Request,
+  response: express.Response
+) {
+  const payload = model3dImportSchema.parse(request.body);
+  const model = {
+    ...payload.model,
+    importedAt: payload.model.importedAt ?? new Date().toISOString()
+  };
+  const scenario = await saveScenarioModel3D(getStringParam(request.params.scenarioId), model);
+
+  response.status(201).json({
+    scenario,
+    model
   });
 }
 
@@ -375,6 +394,10 @@ export function createApp() {
   app.post(
     "/api/scenarios/:scenarioId/imports/tabular",
     routeGuard(handleScenarioTabularImportRequest)
+  );
+  app.post(
+    "/api/scenarios/:scenarioId/imports/model3d",
+    routeGuard(handleScenarioModel3DImportRequest)
   );
   app.get("/api/projects/:projectId/compare", routeGuard(handleScenarioCompareRequest));
   app.get(

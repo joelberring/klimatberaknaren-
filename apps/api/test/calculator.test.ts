@@ -84,6 +84,52 @@ describe("calculateClimateImpact", () => {
     expect(result.sources.length).toBeGreaterThan(0);
   });
 
+  it("raises foundation and parking emissions when soil is soft and a garage is added", () => {
+    const surfaceReference = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      parkingSpaces: 20,
+      foundationType: "platta_pa_mark",
+      groundCondition: "normal_mark"
+    });
+
+    const softSoilGarage = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      parkingSpaces: 20,
+      foundationType: "palar",
+      groundCondition: "gyttja_mjuk",
+      parkingStructureType: "garage_under_mark",
+      parkingGarageFloors: 3
+    });
+
+    const surfaceFoundation = surfaceReference.embodied.breakdown.find(
+      (item) => item.traceKey === "site.foundation"
+    );
+    const softFoundation = softSoilGarage.embodied.breakdown.find(
+      (item) => item.traceKey === "site.foundation"
+    );
+    const surfaceParking = surfaceReference.embodied.breakdown.find(
+      (item) => item.traceKey === "site.parking"
+    );
+    const garageParking = softSoilGarage.embodied.breakdown.find(
+      (item) => item.traceKey === "site.parking"
+    );
+
+    expect(softFoundation?.valueKgCo2e).toBeGreaterThan(surfaceFoundation?.valueKgCo2e ?? 0);
+    expect(garageParking?.valueKgCo2e).toBeGreaterThan(surfaceParking?.valueKgCo2e ?? 0);
+    expect(softSoilGarage.assumptions.some((item) => item.label === "Markförhållande")).toBe(true);
+    expect(softSoilGarage.assumptions.some((item) => item.label === "Parkeringslösning")).toBe(true);
+  });
+
   it("reduces mobility impact when transit overrides indicate stronger accessibility", () => {
     const lowAccess = calculateClimateImpact({
       buildingType: "flerbostadshus",
@@ -152,5 +198,45 @@ describe("calculateClimateImpact", () => {
 
     expect(retrofit.embodied.totalKgCo2e).toBeLessThan(newBuild.embodied.totalKgCo2e);
     expect(retrofit.baselineComparison?.annualOperationalDeltaKgCo2e).toBeLessThan(0);
+  });
+
+  it("reduces uncertainty when early-stage inputs are more complete", () => {
+    const sparseScreening = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 1400,
+      buildYear: 2032,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme"
+    });
+
+    const detailedScreening = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 1400,
+      buildYear: 2032,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      buildingForm: "kompakt",
+      urbanContext: "central",
+      floorsAboveGround: 6,
+      buildingFootprintM2: 240,
+      siteAreaM2: 5000,
+      groundCondition: "sand_grus",
+      foundationType: "platta_pa_mark",
+      parkingStructureType: "none",
+      siteLocation: {
+        lat: 59.3293,
+        lon: 18.0686
+      },
+      transitOverrides: {
+        distanceToTransitStopM: 220,
+        distanceToRailStationM: 600,
+        departuresPerHour: 12
+      },
+      specificEnergyUseKwhM2Year: 82
+    });
+
+    expect(detailedScreening.uncertaintyRangePct).toBeLessThan(sparseScreening.uncertaintyRangePct);
   });
 });

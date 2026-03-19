@@ -55,6 +55,17 @@
     "versionOrYear": "2022"
   },
   {
+    "id": "method-building-shape-proxy",
+    "sourceId": "building-shape-review",
+    "evidenceType": "research",
+    "title": "Byggnadsform som proxy för formfaktor i tidig energiscreening",
+    "publisher": "Energies",
+    "url": "https://www.mdpi.com/1996-1073/17/22/5766",
+    "citationShort": "Översikt över hur byggnadsform och klimat påverkar värme- och kylbehov i tidiga skeden.",
+    "appliesTo": ["operational.heating", "perM2", "perPerson", "totals"],
+    "versionOrYear": "2024"
+  },
+  {
     "id": "method-foundation-proxy",
     "sourceId": "boverket-klimatdeklaration",
     "evidenceType": "internal-assumption",
@@ -62,6 +73,17 @@
     "publisher": "Intern metod ovanpå Boverkets klimatdeklarationsram",
     "url": "https://www.boverket.se/sv/byggande/hallbart-byggande-och-forvaltning/klimatdeklaration/",
     "citationShort": "Intern schablon för screening, kalibrerad mot typologivärden och klimatdeklarationsram.",
+    "appliesTo": ["site.foundation"],
+    "versionOrYear": "2026"
+  },
+  {
+    "id": "method-foundation-soil-proxy",
+    "sourceId": "sgi-foundation-soil",
+    "evidenceType": "research",
+    "title": "Proxy för grundläggning utifrån markförhållanden och grundläggningsval",
+    "publisher": "Statens geotekniska institut",
+    "url": "https://www.sgi.se/om-sgi/nyheter/grundlaggning-en-stor-del",
+    "citationShort": "SGI:s underlag om grundläggningens klimatpåverkan och markförhållandenas betydelse i tidiga skeden.",
     "appliesTo": ["site.foundation"],
     "versionOrYear": "2026"
   },
@@ -88,6 +110,17 @@
     "versionOrYear": "2026"
   },
   {
+    "id": "method-parking-garage-proxy",
+    "sourceId": "parking-garage-embodied-carbon",
+    "evidenceType": "research",
+    "title": "Proxy för parkeringsgarage och garagevåningar",
+    "publisher": "Energy and Buildings",
+    "url": "https://pdxscholar.library.pdx.edu/cengin_fac/515/",
+    "citationShort": "Forskning om embodied carbon i parkeringsgarage där strukturella alternativ jämförs över flera våningar.",
+    "appliesTo": ["site.parking"],
+    "versionOrYear": "2024"
+  },
+  {
     "id": "method-mobility-accessibility",
     "sourceId": "scb-kollektivtrafiknara",
     "evidenceType": "official-statistic",
@@ -108,6 +141,17 @@
     "citationShort": "GTFS-baserade hållplats- och stationsdata används för närhetsproxy i Stockholm-först-kalibreringen.",
     "appliesTo": ["mobility.total", "mobility.transit", "mobility.car", "mobility.walkCycle", "mobility.serviceTrips"],
     "versionOrYear": "2026"
+  },
+  {
+    "id": "method-mobility-centrality",
+    "sourceId": "proximity-based-cities",
+    "evidenceType": "research",
+    "title": "Centralitet och serviceproximity som proxy för lägre bilanvändning",
+    "publisher": "npj Sustainable Mobility and Transport",
+    "url": "https://www.nature.com/articles/s44333-025-00074-0",
+    "citationShort": "Proximity-based cities and 15-minute-city-liknande lägen kopplas till lägre transportrelaterad CO2.",
+    "appliesTo": ["mobility.total", "mobility.transit", "mobility.car", "mobility.walkCycle", "mobility.serviceTrips", "totals", "perPerson"],
+    "versionOrYear": "2025"
   },
   {
     "id": "method-mobility-stockholm",

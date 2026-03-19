@@ -40,8 +40,11 @@ interface EmissionsRecord {
   defaultFloors: Record<string, number>;
   defaultGlazingRatioPct: Record<string, number>;
   foundationMultipliers: Record<string, number>;
+  foundationGroundMultipliers: Record<string, number>;
   landUseFactorsKgCo2ePerM2: Record<string, number>;
   parkingKgCo2ePerSpace: number;
+  parkingStructureMultipliers: Record<string, number>;
+  parkingStructureFloorStepMultipliers: Record<string, number>;
 }
 
 export interface MobilityReferenceRecord {

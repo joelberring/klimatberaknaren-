@@ -30,11 +30,30 @@ export const LAND_TYPES = [
   "jordbruksmark"
 ] as const;
 
+export const BUILDING_FORMS = ["kompakt", "normal", "fragmenterad"] as const;
+
+export const URBAN_CONTEXTS = ["central", "urban", "suburban", "perifer"] as const;
+
 export const FOUNDATION_TYPES = [
   "platta_pa_mark",
   "kantbalk",
   "kallare",
   "palar"
+] as const;
+
+export const GROUND_CONDITIONS = [
+  "berg_fastmark",
+  "sand_grus",
+  "normal_mark",
+  "lera_mjuk",
+  "gyttja_mjuk",
+  "fyllning_osaker"
+] as const;
+
+export const PARKING_STRUCTURE_TYPES = [
+  "none",
+  "garage_ovan_mark",
+  "garage_under_mark"
 ] as const;
 
 export const INTERVENTION_TYPES = [
@@ -51,6 +70,18 @@ export const OBJECT_TYPES = [
   "park",
   "anlaggning",
   "mobilitet"
+] as const;
+
+export const MODEL3D_SOURCE_FORMATS = ["glb", "gltf"] as const;
+export const MODEL3D_PART_CATEGORIES = [
+  "volym",
+  "stomme",
+  "fasad",
+  "tak",
+  "grund",
+  "garage",
+  "installationer",
+  "site"
 ] as const;
 
 export const SCENARIO_MODES = ["quick", "plan"] as const;
@@ -70,10 +101,16 @@ export type FrameMaterial = (typeof FRAME_MATERIALS)[number];
 export type EnergyStandard = (typeof ENERGY_STANDARDS)[number];
 export type HeatingType = (typeof HEATING_TYPES)[number];
 export type LandType = (typeof LAND_TYPES)[number];
+export type BuildingForm = (typeof BUILDING_FORMS)[number];
+export type UrbanContext = (typeof URBAN_CONTEXTS)[number];
 export type FoundationType = (typeof FOUNDATION_TYPES)[number];
+export type GroundCondition = (typeof GROUND_CONDITIONS)[number];
+export type ParkingStructureType = (typeof PARKING_STRUCTURE_TYPES)[number];
 export type InterventionType = (typeof INTERVENTION_TYPES)[number];
 export type RetrofitDepth = (typeof RETROFIT_DEPTHS)[number];
 export type PlanObjectType = (typeof OBJECT_TYPES)[number];
+export type Model3DSourceFormat = (typeof MODEL3D_SOURCE_FORMATS)[number];
+export type Model3DPartCategory = (typeof MODEL3D_PART_CATEGORIES)[number];
 export type ScenarioMode = (typeof SCENARIO_MODES)[number];
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 export type ComparisonMetric = (typeof COMPARISON_METRICS)[number];
@@ -112,6 +149,8 @@ export interface CalculateRequest {
   frameMaterial: FrameMaterial;
   energyStandard: EnergyStandard;
   heatingType: HeatingType;
+  buildingForm?: BuildingForm;
+  urbanContext?: UrbanContext;
   specificEnergyUseKwhM2Year?: number;
   uValues?: UValues;
   estimatedResidents?: number;
@@ -121,7 +160,10 @@ export interface CalculateRequest {
   buildingFootprintM2?: number;
   glazingRatioPct?: number;
   parkingSpaces?: number;
+  parkingStructureType?: ParkingStructureType;
+  parkingGarageFloors?: number;
   landType?: LandType;
+  groundCondition?: GroundCondition;
   foundationType?: FoundationType;
   siteLocation?: SiteLocation;
   transitOverrides?: TransitOverrides;
@@ -220,6 +262,7 @@ export interface OperationalResult {
 
 export interface MobilityInputs {
   accessibilityBand: "high" | "medium" | "low";
+  urbanContext: UrbanContext;
   distanceToTransitStopM?: number;
   distanceToRailStationM?: number;
   departuresPerHour?: number;
@@ -319,6 +362,32 @@ export interface PlanObjectResult {
   geometry?: GeoJsonGeometry;
 }
 
+export interface BuildingModel3DPart {
+  id: string;
+  label: string;
+  category: Model3DPartCategory;
+  meshNames: string[];
+  traceKey?: string;
+  climateKgCo2e?: number;
+  shareOfTotalPct?: number;
+  note?: string;
+}
+
+export interface BuildingModel3D {
+  id: string;
+  name: string;
+  sourceFormat: Model3DSourceFormat;
+  sourceFileName?: string;
+  importedAt: string;
+  georeference?: SiteLocation;
+  footprint?: GeoJsonGeometry;
+  heightMeters?: number;
+  scaleMetersPerUnit?: number;
+  rotationDegrees?: number;
+  parts: BuildingModel3DPart[];
+  notes?: string[];
+}
+
 export interface BaselineExistingSummary {
   totalKgCo2e: number;
   perM2KgCo2e: number;
@@ -356,6 +425,14 @@ export interface CalculationResult {
   baselineExisting?: BaselineExistingSummary;
   baselineComparison?: BaselineComparison;
   byPlanObject?: PlanObjectResult[];
+}
+
+export interface ScenarioRun {
+  id: string;
+  scenarioId: string;
+  createdAt: string;
+  result: CalculationResult;
+  inputSnapshot?: CalculateRequest;
 }
 
 export interface DataSourceDataset {
@@ -405,6 +482,10 @@ export interface BenchmarkProfile {
   id: string;
   organizationId: string;
   name: string;
+  sourceLabel: string;
+  version: string;
+  updatedAt: string;
+  applicability: string;
   normalPerM2KgCo2e: number;
   targetPerM2KgCo2e: number;
   normalPerPersonKgCo2e: number;
@@ -437,6 +518,8 @@ export interface Scenario {
   mode: ScenarioMode;
   quickInput?: CalculateRequest;
   planObjects: PlanObject[];
+  buildingModel3D?: BuildingModel3D;
+  runs: ScenarioRun[];
   latestResult?: CalculationResult;
   lastCalculatedAt?: string;
   createdAt: string;
@@ -517,6 +600,10 @@ export interface ScenarioImportGeoJsonRequest {
   geojson: GeoJsonFeatureCollection;
 }
 
+export interface ScenarioImportModel3DRequest {
+  model: BuildingModel3D;
+}
+
 export interface ScenarioImportTabularRequest {
   format: "csv" | "json";
   content?: string;
@@ -527,6 +614,11 @@ export interface ScenarioImportResponse {
   importedCount: number;
   scenario: Scenario;
   warnings: string[];
+}
+
+export interface ScenarioImportModel3DResponse {
+  scenario: Scenario;
+  model: BuildingModel3D;
 }
 
 export const LABELS = {
@@ -562,11 +654,35 @@ export const LABELS = {
     skog: "Skogsmark",
     jordbruksmark: "Jordbruksmark"
   },
+  groundCondition: {
+    berg_fastmark: "Berg / fastmark",
+    sand_grus: "Sand / grus",
+    normal_mark: "Normal mark",
+    lera_mjuk: "Mjuk lera",
+    gyttja_mjuk: "Gyttja / mycket mjuk mark",
+    fyllning_osaker: "Fyllning / osäker mark"
+  },
+  buildingForm: {
+    kompakt: "Kompakt",
+    normal: "Normal",
+    fragmenterad: "Fragmenterad"
+  },
+  urbanContext: {
+    central: "Centralt",
+    urban: "Urban",
+    suburban: "Förort",
+    perifer: "Perifert"
+  },
   foundationType: {
     platta_pa_mark: "Platta på mark",
     kantbalk: "Kantbalk",
     kallare: "Källare",
     palar: "Pålning"
+  },
+  parkingStructureType: {
+    none: "Inget garage",
+    garage_ovan_mark: "Garage ovan mark",
+    garage_under_mark: "Garage under mark"
   },
   interventionType: {
     nybyggnad: "Nybyggnad",
@@ -584,6 +700,20 @@ export const LABELS = {
     park: "Park",
     anlaggning: "Anläggning",
     mobilitet: "Mobilitet"
+  },
+  model3DSourceFormat: {
+    glb: "GLB",
+    gltf: "GLTF"
+  },
+  model3DPartCategory: {
+    volym: "Volym",
+    stomme: "Stomme",
+    fasad: "Fasad",
+    tak: "Tak",
+    grund: "Grund",
+    garage: "Garage",
+    installationer: "Installationer",
+    site: "Tomt"
   },
   evidenceType: {
     standard: "Standard",

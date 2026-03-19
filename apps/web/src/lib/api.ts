@@ -1,4 +1,5 @@
 import type {
+  BuildingModel3D,
   BenchmarkProfile,
   CalculateRequest,
   CalculationResult,
@@ -7,6 +8,7 @@ import type {
   CreateSessionRequest,
   DataSourcesResponse,
   Project,
+  ScenarioImportModel3DResponse,
   ScenarioComparison,
   ScenarioImportResponse,
   UserSession,
@@ -104,6 +106,15 @@ export async function importTabularApi(
 ) {
   return parseJson<ScenarioImportResponse>(
     await jsonRequest(`/api/scenarios/${scenarioId}/imports/tabular`, payload)
+  );
+}
+
+export async function importModel3DApi(
+  scenarioId: string,
+  payload: { model: BuildingModel3D }
+) {
+  return parseJson<ScenarioImportModel3DResponse>(
+    await jsonRequest(`/api/scenarios/${scenarioId}/imports/model3d`, payload)
   );
 }
 

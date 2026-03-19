@@ -81,6 +81,42 @@
     "updatedAt": "2026-03-18"
   },
   {
+    "id": "building-shape-review",
+    "title": "A Review of Building Physical Shapes on Heating and Cooling Energy Consumption",
+    "publisher": "Energies",
+    "license": "Publicerad forskningsartikel",
+    "url": "https://www.mdpi.com/1996-1073/17/22/5766",
+    "note": "Översikt som kopplar byggnadsform, klimat och energibehov i tidig design.",
+    "updatedAt": "2026-03-18"
+  },
+  {
+    "id": "sgi-foundation-soil",
+    "title": "Grundläggning - en stor del av ett bygges klimatpåverkan",
+    "publisher": "Statens geotekniska institut",
+    "license": "Offentlig information",
+    "url": "https://www.sgi.se/om-sgi/nyheter/grundlaggning-en-stor-del",
+    "note": "Källa för att mjuka jordar som lera och gyttja ofta driver upp grundläggningsinsatser och klimatpåverkan.",
+    "updatedAt": "2026-03-19"
+  },
+  {
+    "id": "parking-garage-embodied-carbon",
+    "title": "Comparing the embodied carbon and energy of a mass timber structure system to typical steel and concrete alternatives for parking garages",
+    "publisher": "Energy and Buildings",
+    "license": "Open access / publicerad forskningsartikel",
+    "url": "https://pdxscholar.library.pdx.edu/cengin_fac/515/",
+    "note": "Stöd för att parkeringsgarage ofta utgör en stor inbyggd klimatpost och att fler strukturella nivåer ökar materialinsatsen.",
+    "updatedAt": "2026-03-19"
+  },
+  {
+    "id": "proximity-based-cities",
+    "title": "Proximity-based cities emit less mobility-driven CO2",
+    "publisher": "npj Sustainable Mobility and Transport",
+    "license": "Publicerad forskningsartikel",
+    "url": "https://www.nature.com/articles/s44333-025-00074-0",
+    "note": "Stöd för att hög serviceproximity och 15-minute-city-liknande lägen minskar transportutsläpp.",
+    "updatedAt": "2026-03-18"
+  },
+  {
     "id": "scb-kollektivtrafiknara",
     "title": "SCB statistik om kollektivtrafiknära läge",
     "publisher": "SCB",

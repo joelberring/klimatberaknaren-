@@ -2,12 +2,16 @@ import { z } from "zod";
 
 import {
   BUILDING_TYPES,
+  BUILDING_FORMS,
   ENERGY_STANDARDS,
+  GROUND_CONDITIONS,
   FOUNDATION_TYPES,
   FRAME_MATERIALS,
   HEATING_TYPES,
   INTERVENTION_TYPES,
-  LAND_TYPES
+  LAND_TYPES,
+  PARKING_STRUCTURE_TYPES,
+  URBAN_CONTEXTS
 } from "../../../../packages/shared/src";
 
 const existingBuildingSchema = z.object({
@@ -25,6 +29,8 @@ export const calculateSchema = z.object({
   frameMaterial: z.enum(FRAME_MATERIALS),
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
+  buildingForm: z.enum(BUILDING_FORMS).optional(),
+  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
   specificEnergyUseKwhM2Year: z.number().positive().max(500).optional(),
   estimatedResidents: z.number().min(0).max(1_000_000).optional(),
   estimatedWorkers: z.number().min(0).max(1_000_000).optional(),
@@ -33,7 +39,10 @@ export const calculateSchema = z.object({
   buildingFootprintM2: z.number().positive().max(1_000_000).optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).max(100_000).optional(),
+  parkingStructureType: z.enum(PARKING_STRUCTURE_TYPES).optional(),
+  parkingGarageFloors: z.number().int().min(1).max(20).optional(),
   landType: z.enum(LAND_TYPES).optional(),
+  groundCondition: z.enum(GROUND_CONDITIONS).optional(),
   foundationType: z.enum(FOUNDATION_TYPES).optional(),
   siteLocation: z
     .object({

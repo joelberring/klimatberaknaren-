@@ -2,14 +2,20 @@ import { z } from "zod";
 
 import {
   BUILDING_TYPES,
+  BUILDING_FORMS,
   ENERGY_STANDARDS,
+  GROUND_CONDITIONS,
   FOUNDATION_TYPES,
   FRAME_MATERIALS,
   HEATING_TYPES,
   INTERVENTION_TYPES,
   LAND_TYPES,
+  MODEL3D_PART_CATEGORIES,
+  MODEL3D_SOURCE_FORMATS,
   OBJECT_TYPES,
-  SCENARIO_MODES
+  PARKING_STRUCTURE_TYPES,
+  SCENARIO_MODES,
+  URBAN_CONTEXTS
 } from "../../../../packages/shared/src";
 
 const geometrySchema = z.discriminatedUnion("type", [
@@ -26,6 +32,39 @@ const geometrySchema = z.discriminatedUnion("type", [
     coordinates: z.array(z.array(z.array(z.tuple([z.number(), z.number()])))).min(1)
   })
 ]);
+
+const model3dPartSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  category: z.enum(MODEL3D_PART_CATEGORIES),
+  meshNames: z.array(z.string().min(1)).default([]),
+  traceKey: z.string().min(1).optional(),
+  climateKgCo2e: z.number().min(0).optional(),
+  shareOfTotalPct: z.number().min(0).max(100).optional(),
+  note: z.string().max(300).optional()
+});
+
+export const model3dImportSchema = z.object({
+  model: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(120),
+    sourceFormat: z.enum(MODEL3D_SOURCE_FORMATS),
+    sourceFileName: z.string().max(260).optional(),
+    importedAt: z.string().datetime().optional(),
+    georeference: z
+      .object({
+        lat: z.number().min(-90).max(90),
+        lon: z.number().min(-180).max(180)
+      })
+      .optional(),
+    footprint: geometrySchema.optional(),
+    heightMeters: z.number().positive().max(10_000).optional(),
+    scaleMetersPerUnit: z.number().positive().max(1000).optional(),
+    rotationDegrees: z.number().min(-360).max(360).optional(),
+    parts: z.array(model3dPartSchema).min(1),
+    notes: z.array(z.string().max(500)).default([])
+  })
+});
 
 export const sessionSchema = z.object({
   email: z.string().email(),
@@ -45,6 +84,8 @@ export const scenarioQuickInputSchema = z.object({
   frameMaterial: z.enum(FRAME_MATERIALS),
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
+  buildingForm: z.enum(BUILDING_FORMS).optional(),
+  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
   specificEnergyUseKwhM2Year: z.number().positive().max(500).optional(),
   estimatedResidents: z.number().min(0).optional(),
   estimatedWorkers: z.number().min(0).optional(),
@@ -53,7 +94,10 @@ export const scenarioQuickInputSchema = z.object({
   buildingFootprintM2: z.number().positive().max(1_000_000).optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).max(100_000).optional(),
+  parkingStructureType: z.enum(PARKING_STRUCTURE_TYPES).optional(),
+  parkingGarageFloors: z.number().int().min(1).max(20).optional(),
   landType: z.enum(LAND_TYPES).optional(),
+  groundCondition: z.enum(GROUND_CONDITIONS).optional(),
   foundationType: z.enum(FOUNDATION_TYPES).optional(),
   siteLocation: z
     .object({
@@ -116,6 +160,8 @@ const planObjectPropertySchema = z.object({
   frameMaterial: z.enum(FRAME_MATERIALS),
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
+  buildingForm: z.enum(BUILDING_FORMS).optional(),
+  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
   areaHa: z.number().positive().optional(),
   residents: z.number().min(0).optional(),
   workers: z.number().min(0).optional(),
@@ -125,7 +171,10 @@ const planObjectPropertySchema = z.object({
   buildingFootprintM2: z.number().positive().optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).optional(),
+  parkingStructureType: z.enum(PARKING_STRUCTURE_TYPES).optional(),
+  parkingGarageFloors: z.number().int().min(1).max(20).optional(),
   landType: z.enum(LAND_TYPES).optional(),
+  groundCondition: z.enum(GROUND_CONDITIONS).optional(),
   foundationType: z.enum(FOUNDATION_TYPES).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lon: z.number().min(-180).max(180).optional(),

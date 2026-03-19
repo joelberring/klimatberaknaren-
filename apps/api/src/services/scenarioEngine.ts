@@ -679,6 +679,7 @@ export function calculateScenarioResult(
       })),
       inputs: {
         accessibilityBand: "medium",
+        urbanContext: "urban",
         source: "default"
       }
     },

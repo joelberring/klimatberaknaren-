@@ -7,6 +7,7 @@ import {
   handleScenarioCalculateRequest,
   handleScenarioCompareRequest,
   handleScenarioCreateRequest,
+  handleScenarioModel3DImportRequest,
   handleScenarioGeoJsonImportRequest,
   handleSessionLogin,
   handleWorkspaceRequest
@@ -97,6 +98,31 @@ describe("workspace flows", () => {
       scenarioResponse
     );
 
+    const modelImportResponse = createMockResponse();
+    await handleScenarioModel3DImportRequest(
+      {
+        params: { scenarioId: (scenarioResponse.body as { id: string }).id },
+        body: {
+          model: {
+            id: "model-1",
+            name: "Husmodell",
+            sourceFormat: "gltf",
+            importedAt: "2026-03-18T08:30:00.000Z",
+            parts: [
+              {
+                id: "part-1",
+                label: "Stomme",
+                category: "stomme",
+                meshNames: ["frame"]
+              }
+            ],
+            notes: []
+          }
+        }
+      } as unknown as Request,
+      modelImportResponse
+    );
+
     const calculationResponse = createMockResponse();
     await handleScenarioCalculateRequest(
       {
@@ -106,18 +132,70 @@ describe("workspace flows", () => {
       calculationResponse
     );
 
+    const secondCalculationResponse = createMockResponse();
+    await handleScenarioCalculateRequest(
+      {
+        params: { scenarioId: (scenarioResponse.body as { id: string }).id },
+        body: {}
+      } as unknown as Request,
+      secondCalculationResponse
+    );
+
     const body = calculationResponse.body as {
       result: { vsBenchmark: Array<{ metric: string }>; recommendedActions: unknown[] };
+      scenario: {
+        runs: Array<{ scenarioId: string }>;
+        latestResult: unknown;
+        buildingModel3D?: { parts: Array<{ label: string }> };
+      };
     };
+    const secondBody = secondCalculationResponse.body as {
+      scenario: {
+        runs: Array<{ scenarioId: string }>;
+        latestResult: unknown;
+      };
+    };
+
+    const workspaceAfterCalculation = createMockResponse();
+    await handleWorkspaceRequest(
+      {
+        query: {
+          organizationId: "stockholm-stad"
+        }
+      } as unknown as Request,
+      workspaceAfterCalculation
+    );
 
     expect(calculationResponse.statusCode).toBe(200);
     expect((workspaceAfterLogin.body as { session: { organizationId: string } }).session.organizationId).toBe(
       "stockholm-stad"
     );
+    expect(body.scenario.runs).toHaveLength(1);
+    expect(body.scenario.runs[0].scenarioId).toBe((scenarioResponse.body as { id: string }).id);
+    expect(body.scenario.latestResult).toBeTruthy();
+    expect(secondBody.scenario.runs).toHaveLength(2);
+    expect(secondBody.scenario.latestResult).toBeTruthy();
+    expect((modelImportResponse.body as { model: { parts: Array<{ label: string }> } }).model.parts[0].label).toBe(
+      "Stomme"
+    );
     expect(body.result.vsBenchmark).toEqual(
       expect.arrayContaining([expect.objectContaining({ metric: "perM2" })])
     );
     expect(body.result.recommendedActions.length).toBeGreaterThan(0);
+    expect(
+      (
+        workspaceAfterCalculation.body as {
+          projects: Array<{ scenarios: Array<{ runs: unknown[]; buildingModel3D?: unknown }> }>;
+        }
+      ).projects[0].scenarios[0].runs
+    ).toHaveLength(2);
+    expect(
+      (
+        workspaceAfterCalculation.body as {
+          projects: Array<{ scenarios: Array<{ buildingModel3D?: { parts: Array<{ label: string }> } }> }>;
+        }
+      ).projects[0].scenarios[0].buildingModel3D?.parts[0].label
+    ).toBe("Stomme");
   });
 
   it("imports GeoJSON plan objects and compares two calculated scenarios", async () => {
