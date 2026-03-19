@@ -57,7 +57,7 @@ if (!workspaceAfterProject.projects?.some((entry) => entry.id === project.id)) {
 }
 
 const scenario = (
-  await requestJson(`/api/projects/${project.id}/scenarios`, {
+  await requestJson(`/api/project-scenarios?projectId=${encodeURIComponent(project.id)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -79,7 +79,7 @@ const scenario = (
 ).body;
 
 const calculation = (
-  await requestJson(`/api/scenarios/${scenario.id}/calculate`, {
+  await requestJson(`/api/scenario-calculate?scenarioId=${encodeURIComponent(scenario.id)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -99,7 +99,7 @@ const calculation = (
 ).body;
 
 const importResponse = (
-  await requestJson(`/api/scenarios/${scenario.id}/imports/tabular`, {
+  await requestJson(`/api/scenario-import-tabular?scenarioId=${encodeURIComponent(scenario.id)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -124,14 +124,17 @@ const importResponse = (
 ).body;
 
 const deletedScenario = (
-  await requestJson(`/api/projects/${project.id}/scenarios/${scenario.id}`, {
-    method: "DELETE",
-    headers: authHeaders
-  })
+  await requestJson(
+    `/api/scenario-delete?projectId=${encodeURIComponent(project.id)}&scenarioId=${encodeURIComponent(scenario.id)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders
+    }
+  )
 ).body;
 
 const deletedProject = (
-  await requestJson(`/api/projects/${project.id}`, {
+  await requestJson(`/api/project-delete?projectId=${encodeURIComponent(project.id)}`, {
     method: "DELETE",
     headers: authHeaders
   })

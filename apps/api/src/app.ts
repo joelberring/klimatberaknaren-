@@ -62,6 +62,20 @@ function getStringParam(value: string | string[] | undefined) {
   return value ?? "";
 }
 
+function getRouteParam(request: express.Request, key: string) {
+  const param = request.params?.[key];
+  if (typeof param === "string" && param.length > 0) {
+    return param;
+  }
+
+  const queryValue = (request.query as Record<string, unknown>)[key];
+  if (Array.isArray(queryValue)) {
+    return typeof queryValue[0] === "string" ? queryValue[0] : "";
+  }
+
+  return typeof queryValue === "string" ? queryValue : "";
+}
+
 function getCookieValue(request: express.Request, key: string) {
   const cookieHeader = request.headers?.cookie ?? "";
   const value = cookieHeader
@@ -176,7 +190,7 @@ export async function handleProjectDeleteRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const project = await deleteProject(getStringParam(request.params.projectId));
+  const project = await deleteProject(getRouteParam(request, "projectId"));
   logWorkspaceMutation("project:delete", {
     projectId: project.id,
     organizationId: project.organizationId
@@ -188,7 +202,7 @@ export async function handleProjectDetailRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const project = await getProject(getStringParam(request.params.projectId));
+  const project = await getProject(getRouteParam(request, "projectId"));
 
   if (!project) {
     throw new Error("Projektet hittades inte");
@@ -202,7 +216,7 @@ export async function handleScenarioCreateRequest(
   response: express.Response
 ) {
   const payload = scenarioSchema.parse(request.body);
-  const projectId = getStringParam(request.params.projectId);
+  const projectId = getRouteParam(request, "projectId");
   const scenario = await createScenario(projectId, payload);
   const project = await getProject(projectId);
   logWorkspaceMutation("scenario:create", {
@@ -217,8 +231,8 @@ export async function handleScenarioDeleteRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const projectId = getStringParam(request.params.projectId);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const projectId = getRouteParam(request, "projectId");
+  const scenarioId = getRouteParam(request, "scenarioId");
   const removedScenario = await deleteScenario(projectId, scenarioId);
   const project = await getProject(projectId);
   logWorkspaceMutation("scenario:delete", {
@@ -234,8 +248,8 @@ export async function handleScenarioDuplicateRequest(
   response: express.Response
 ) {
   const payload = duplicateScenarioSchema.parse(request.body);
-  const projectId = getStringParam(request.params.projectId);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const projectId = getRouteParam(request, "projectId");
+  const scenarioId = getRouteParam(request, "scenarioId");
   response
     .status(201)
     .json(
@@ -252,7 +266,7 @@ export async function handleScenarioCalculateRequest(
   response: express.Response
 ) {
   const payload = scenarioCalculationSchema.parse(request.body);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const scenarioId = getRouteParam(request, "scenarioId");
   const match = await getScenario(scenarioId);
 
   if (!match) {
@@ -284,7 +298,7 @@ export async function handleScenarioResultRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const match = await getScenario(getStringParam(request.params.scenarioId));
+  const match = await getScenario(getRouteParam(request, "scenarioId"));
 
   if (!match) {
     throw new Error("Scenariot hittades inte");
@@ -298,7 +312,7 @@ export async function handleScenarioGeoJsonImportRequest(
   response: express.Response
 ) {
   const payload = geoJsonImportSchema.parse(request.body);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const scenarioId = getRouteParam(request, "scenarioId");
   const features = payload.geojson.features as Array<{
     properties: Record<string, unknown>;
     geometry: GeoJsonGeometry | null;
@@ -328,7 +342,7 @@ export async function handleScenarioTabularImportRequest(
   response: express.Response
 ) {
   const payload = tabularImportSchema.parse(request.body);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const scenarioId = getRouteParam(request, "scenarioId");
   const { planObjects, warnings } = importTabularRows(payload);
   const scenario = await appendScenarioPlanObjects(scenarioId, planObjects);
   const match = await getScenario(scenarioId);
@@ -351,7 +365,7 @@ export async function handleScenarioModel3DImportRequest(
   response: express.Response
 ) {
   const payload = model3dImportSchema.parse(request.body);
-  const scenarioId = getStringParam(request.params.scenarioId);
+  const scenarioId = getRouteParam(request, "scenarioId");
   const model: BuildingModel3D = {
     ...payload.model,
     importedAt: payload.model.importedAt ?? new Date().toISOString(),
@@ -376,9 +390,9 @@ export async function handleScenarioCompareRequest(
   request: express.Request,
   response: express.Response
 ) {
-  const project = await getProject(getStringParam(request.params.projectId));
-  const baseScenarioId = String(request.query.base ?? "");
-  const candidateScenarioId = String(request.query.candidate ?? "");
+  const project = await getProject(getRouteParam(request, "projectId"));
+  const baseScenarioId = String(request.query.base ?? request.body?.base ?? "");
+  const candidateScenarioId = String(request.query.candidate ?? request.body?.candidate ?? "");
 
   if (!project) {
     throw new Error("Projektet hittades inte");
@@ -391,9 +405,7 @@ export function handleBenchmarkProfilesRequest(
   request: express.Request,
   response: express.Response
 ) {
-  response.json(
-    getBenchmarkProfilesForOrganization(getStringParam(request.params.organizationId))
-  );
+  response.json(getBenchmarkProfilesForOrganization(getRouteParam(request, "organizationId")));
 }
 
 export function handleApiError(
@@ -475,6 +487,18 @@ export function createApp() {
   app.post("/api/calculate", routeGuard(handleCalculateRequest));
   app.get("/api/projects", routeGuard(handleProjectsListRequest));
   app.post("/api/projects", routeGuard(handleProjectCreateRequest));
+  app.get("/api/project-detail", routeGuard(handleProjectDetailRequest));
+  app.delete("/api/project-delete", routeGuard(handleProjectDeleteRequest));
+  app.post("/api/project-scenarios", routeGuard(handleScenarioCreateRequest));
+  app.delete("/api/scenario-delete", routeGuard(handleScenarioDeleteRequest));
+  app.post("/api/scenario-duplicate", routeGuard(handleScenarioDuplicateRequest));
+  app.post("/api/scenario-calculate", routeGuard(handleScenarioCalculateRequest));
+  app.get("/api/scenario-results", routeGuard(handleScenarioResultRequest));
+  app.post("/api/scenario-import-geojson", routeGuard(handleScenarioGeoJsonImportRequest));
+  app.post("/api/scenario-import-tabular", routeGuard(handleScenarioTabularImportRequest));
+  app.post("/api/scenario-import-model3d", routeGuard(handleScenarioModel3DImportRequest));
+  app.get("/api/project-compare", routeGuard(handleScenarioCompareRequest));
+  app.get("/api/benchmark-profiles", routeGuard(handleBenchmarkProfilesRequest));
   app.delete("/api/projects/:projectId", routeGuard(handleProjectDeleteRequest));
   app.get("/api/projects/:projectId", routeGuard(handleProjectDetailRequest));
   app.post("/api/projects/:projectId/scenarios", routeGuard(handleScenarioCreateRequest));

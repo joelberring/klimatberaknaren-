@@ -84,35 +84,41 @@ export async function createProjectApi(payload: CreateProjectRequest) {
 
 export async function deleteProjectApi(projectId: string) {
   return parseJson<Project>(
-    await fetch(`/api/projects/${projectId}`, {
+    await fetch(`/api/project-delete?projectId=${encodeURIComponent(projectId)}`, {
       method: "DELETE",
       credentials: "same-origin"
     }),
-    `DELETE /api/projects/${projectId}`
+    `DELETE /api/project-delete`
   );
 }
 
 export async function createScenarioApi(projectId: string, payload: CreateScenarioRequest) {
   return parseJson<Project["scenarios"][number]>(
-    await jsonRequest(`/api/projects/${projectId}/scenarios`, payload),
-    `POST /api/projects/${projectId}/scenarios`
+    await jsonRequest(`/api/project-scenarios?projectId=${encodeURIComponent(projectId)}`, payload),
+    `POST /api/project-scenarios`
   );
 }
 
 export async function deleteScenarioApi(projectId: string, scenarioId: string) {
   return parseJson<Project["scenarios"][number]>(
-    await fetch(`/api/projects/${projectId}/scenarios/${scenarioId}`, {
-      method: "DELETE",
-      credentials: "same-origin"
-    }),
-    `DELETE /api/projects/${projectId}/scenarios/${scenarioId}`
+    await fetch(
+      `/api/scenario-delete?projectId=${encodeURIComponent(projectId)}&scenarioId=${encodeURIComponent(scenarioId)}`,
+      {
+        method: "DELETE",
+        credentials: "same-origin"
+      }
+    ),
+    `DELETE /api/scenario-delete`
   );
 }
 
 export async function duplicateScenarioApi(projectId: string, scenarioId: string, name?: string) {
   return parseJson<Project["scenarios"][number]>(
-    await jsonRequest(`/api/projects/${projectId}/scenarios/${scenarioId}/duplicate`, { name }),
-    `POST /api/projects/${projectId}/scenarios/${scenarioId}/duplicate`
+    await jsonRequest(
+      `/api/scenario-duplicate?projectId=${encodeURIComponent(projectId)}&scenarioId=${encodeURIComponent(scenarioId)}`,
+      { name }
+    ),
+    `POST /api/scenario-duplicate`
   );
 }
 
@@ -122,10 +128,10 @@ export async function calculateClimateImpact(payload: CalculateRequest) {
 
 export async function calculateScenarioApi(scenarioId: string, quickInput?: CalculateRequest) {
   return parseJson<{ scenario: Project["scenarios"][number]; result: CalculationResult }>(
-    await jsonRequest(`/api/scenarios/${scenarioId}/calculate`, {
+    await jsonRequest(`/api/scenario-calculate?scenarioId=${encodeURIComponent(scenarioId)}`, {
       quickInput
     }),
-    `POST /api/scenarios/${scenarioId}/calculate`
+    `POST /api/scenario-calculate`
   );
 }
 
@@ -135,19 +141,22 @@ export async function compareScenariosApi(
   candidateScenarioId: string
 ) {
   return parseJson<ScenarioComparison>(
-    await fetch(`/api/projects/${projectId}/compare?base=${baseScenarioId}&candidate=${candidateScenarioId}`, {
+    await fetch(
+      `/api/project-compare?projectId=${encodeURIComponent(projectId)}&base=${encodeURIComponent(baseScenarioId)}&candidate=${encodeURIComponent(candidateScenarioId)}`,
+      {
       credentials: "same-origin"
-    }),
-    `GET /api/projects/${projectId}/compare`
+      }
+    ),
+    `GET /api/project-compare`
   );
 }
 
 export async function importGeoJsonApi(scenarioId: string, geojson: unknown) {
   return parseJson<ScenarioImportResponse>(
-    await jsonRequest(`/api/scenarios/${scenarioId}/imports/geojson`, {
+    await jsonRequest(`/api/scenario-import-geojson?scenarioId=${encodeURIComponent(scenarioId)}`, {
       geojson
     }),
-    `POST /api/scenarios/${scenarioId}/imports/geojson`
+    `POST /api/scenario-import-geojson`
   );
 }
 
@@ -156,8 +165,8 @@ export async function importTabularApi(
   payload: { format: "csv" | "json"; content?: string; rows?: Array<Record<string, string | number>> }
 ) {
   return parseJson<ScenarioImportResponse>(
-    await jsonRequest(`/api/scenarios/${scenarioId}/imports/tabular`, payload),
-    `POST /api/scenarios/${scenarioId}/imports/tabular`
+    await jsonRequest(`/api/scenario-import-tabular?scenarioId=${encodeURIComponent(scenarioId)}`, payload),
+    `POST /api/scenario-import-tabular`
   );
 }
 
@@ -166,16 +175,16 @@ export async function importModel3DApi(
   payload: { model: BuildingModel3D }
 ) {
   return parseJson<ScenarioImportModel3DResponse>(
-    await jsonRequest(`/api/scenarios/${scenarioId}/imports/model3d`, payload),
-    `POST /api/scenarios/${scenarioId}/imports/model3d`
+    await jsonRequest(`/api/scenario-import-model3d?scenarioId=${encodeURIComponent(scenarioId)}`, payload),
+    `POST /api/scenario-import-model3d`
   );
 }
 
 export async function fetchBenchmarkProfiles(organizationId: string) {
   return parseJson<BenchmarkProfile[]>(
-    await fetch(`/api/benchmark-profiles/${organizationId}`, {
+    await fetch(`/api/benchmark-profiles?organizationId=${encodeURIComponent(organizationId)}`, {
       credentials: "same-origin"
     }),
-    `GET /api/benchmark-profiles/${organizationId}`
+    `GET /api/benchmark-profiles`
   );
 }

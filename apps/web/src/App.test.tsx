@@ -542,7 +542,7 @@ describe("App", () => {
         return new Response(JSON.stringify(project));
       }
 
-      if (url === "/api/projects/project-1" && method === "DELETE") {
+      if (url === "/api/project-delete?projectId=project-1" && method === "DELETE") {
         const [deletedProject] =
           workspacePayload.projects.filter((project) => project.id === "project-1");
         workspacePayload = {
@@ -552,7 +552,7 @@ describe("App", () => {
         return new Response(JSON.stringify(deletedProject ?? null));
       }
 
-      if (url === "/api/projects/project-1/scenarios" && method === "POST") {
+      if (url === "/api/project-scenarios?projectId=project-1" && method === "POST") {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         const scenario: TestScenario = {
           id: "scenario-1",
@@ -578,7 +578,10 @@ describe("App", () => {
         return new Response(JSON.stringify(scenario));
       }
 
-      if (url === "/api/projects/project-1/scenarios/scenario-1" && method === "DELETE") {
+      if (
+        url === "/api/scenario-delete?projectId=project-1&scenarioId=scenario-1" &&
+        method === "DELETE"
+      ) {
         const project = workspacePayload.projects[0];
         const deletedScenario = project?.scenarios.find((scenario) => scenario.id === "scenario-1") ?? null;
         if (project) {
@@ -595,7 +598,7 @@ describe("App", () => {
         return new Response(JSON.stringify(deletedScenario));
       }
 
-      if (url === "/api/scenarios/scenario-1/calculate" && method === "POST") {
+      if (url === "/api/scenario-calculate?scenarioId=scenario-1" && method === "POST") {
         const project = workspacePayload.projects[0];
         const currentScenario = project?.scenarios[0];
         const runIndex = (currentScenario?.runs?.length ?? 0) + 1;
@@ -650,7 +653,7 @@ describe("App", () => {
         return new Response(JSON.stringify({ scenario, result }));
       }
 
-      if (url === "/api/scenarios/scenario-1/imports/tabular" && method === "POST") {
+      if (url === "/api/scenario-import-tabular?scenarioId=scenario-1" && method === "POST") {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         const rows = Array.isArray(body.rows) ? body.rows : [];
         const importedPlanObjects = rows.map((row: Record<string, unknown>, index: number) => ({
@@ -901,11 +904,11 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /ta bort projekt/i }));
     await waitFor(() => {
-      expect(screen.queryByText(/rivningsprojekt/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/skapa ett projekt för att börja bygga scenarier/i)
+      ).toBeInTheDocument();
     });
-    expect(
-      screen.getByText(/skapa ett projekt för att börja bygga scenarier/i)
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ta bort projekt/i })).not.toBeInTheDocument();
 
     confirmSpy.mockRestore();
   });
