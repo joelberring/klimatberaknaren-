@@ -5,7 +5,7 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist",
   "functions": {
-    "api/[...route].ts": {
+    "api/**/*.ts": {
       "maxDuration": 10
     }
   }

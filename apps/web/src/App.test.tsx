@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -490,6 +490,18 @@ describe("App", () => {
         return new Response(JSON.stringify(workspacePayload));
       }
 
+      if (url === "/api/health") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            boverketAdapterEnabled: false,
+            persistence: {
+              mode: "memory"
+            }
+          })
+        );
+      }
+
       if (url === "/api/calculate" && method === "POST") {
         return new Response(JSON.stringify(createResult()));
       }
@@ -745,6 +757,7 @@ describe("App", () => {
   it("runs the quick calculator and renders totals plus source metadata", async () => {
     render(<App />);
 
+    expect(await screen.findByText(/funktionstäckning/i)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^Bruttoarea$/i), "1000");
     await userEvent.type(screen.getByLabelText(/^Byggår$/i), "2005");
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
@@ -754,6 +767,21 @@ describe("App", () => {
       "href",
       "https://example.com"
     );
+  });
+
+  it("shows locked scenario workbench states before a scenario exists", async () => {
+    render(<App />);
+
+    expect(await screen.findByText(/funktionstäckning/i)).toBeInTheDocument();
+    expect(screen.getByText(/välj scenario för att redigera/i)).toBeInTheDocument();
+    expect(screen.getByText(/scenario låst/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/importen låses upp när ett scenario är valt eller skapat/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/jämförelse väntar på fler scenarier/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/välj eller skapa ett scenario för att börja använda tabellinmatningen/i)
+    ).toBeInTheDocument();
   });
 
   it("opens the workspace, creates a project and scenario, then shows benchmarked scenario results", async () => {
@@ -800,11 +828,16 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
+    await userEvent.click(screen.getByRole("button", { name: /ny stadsdel 2040/i }));
     await userEvent.type(screen.getByPlaceholderText(/tät struktur a/i), "Tabellscenario");
     await userEvent.click(screen.getByRole("button", { name: /skapa scenario/i }));
 
-    await screen.findByText(/flera byggnader i samma scenario/i);
-    await userEvent.click(screen.getByRole("button", { name: /duplicera första/i }));
+    const matrixCard = await screen.findByText(/flera byggnader i samma scenario/i);
+    await userEvent.click(
+      within(matrixCard.closest("section") ?? matrixCard.parentElement ?? document.body).getByRole("button", {
+        name: /duplicera första/i
+      })
+    );
     await userEvent.click(screen.getByRole("button", { name: /importera till scenario/i }));
 
     expect(await screen.findByText("Tabellscenario 1", { exact: true })).toBeInTheDocument();

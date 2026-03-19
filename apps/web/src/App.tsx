@@ -39,10 +39,12 @@ import {
   createScenarioApi,
   duplicateScenarioApi,
   fetchDataSources,
+  fetchHealth,
   fetchWorkspace,
   importGeoJsonApi,
   importTabularApi,
-  loginSession
+  loginSession,
+  type ApiHealthResponse
 } from "./lib/api";
 import { BenchmarkPositionChart } from "./components/BenchmarkPositionChart";
 import { AnalysisPage } from "./components/AnalysisPage";
@@ -781,7 +783,21 @@ function buildAnalysisPath(scenarioId: string, runId?: string) {
   return `/analysis/${encodeURIComponent(scenarioId)}${query ? `?${query}` : ""}`;
 }
 
+type WorkflowRegistryCard = {
+  order: number;
+  id: string;
+  title: string;
+  summary: string;
+  codeState: string;
+  uiState: string;
+  deployState: string;
+  actionLabel: string;
+  onAction: () => void;
+  disabled?: boolean;
+};
+
 function ScenarioComparisonBoard({
+  id,
   project,
   benchmarkProfiles,
   standardProfiles,
@@ -793,6 +809,7 @@ function ScenarioComparisonBoard({
   onToggleStandard,
   onMetricChange
 }: {
+  id?: string;
   project: Project | null;
   benchmarkProfiles: BenchmarkProfile[];
   standardProfiles: StandardProfile[];
@@ -806,12 +823,9 @@ function ScenarioComparisonBoard({
 }) {
   const scenarios = project?.scenarios.filter((scenario) => scenario.latestResult) ?? [];
 
-  if (scenarios.length < 2) {
-    return null;
-  }
-
   const focusScenario =
     scenarios.find((scenario) => scenario.id === focusScenarioId) ?? scenarios[0];
+  const focusResult = focusScenario?.latestResult as CalculationResult | undefined;
   const selectedBenchmarks = benchmarkProfiles.filter((profile) =>
     selectedBenchmarkIds.includes(profile.id)
   );
@@ -826,7 +840,7 @@ function ScenarioComparisonBoard({
       unit: string;
       kind: "normal" | "target";
     }> = [];
-    const baseResult = focusScenario.latestResult;
+    const baseResult = focusResult;
 
     if (!baseResult) {
       return referenceRows;
@@ -863,13 +877,12 @@ function ScenarioComparisonBoard({
   });
   const standardRows = selectedStandards
     .filter((profile) => {
-      const result = focusScenario.latestResult as CalculationResult | undefined;
-      if (!result) {
+      if (!focusResult) {
         return false;
       }
 
-      const buildingType = focusScenario.quickInput?.buildingType;
-      const interventionType = focusScenario.quickInput?.interventionType ?? "nybyggnad";
+      const buildingType = focusScenario?.quickInput?.buildingType;
+      const interventionType = focusScenario?.quickInput?.interventionType ?? "nybyggnad";
 
       return (
         getStandardMetricValue(profile, selectedMetric) !== undefined &&
@@ -881,7 +894,7 @@ function ScenarioComparisonBoard({
       id: profile.id,
       label: profile.label,
       value: getStandardMetricValue(profile, selectedMetric) ?? 0,
-      unit: getScenarioMetricUnit(focusScenario.latestResult as CalculationResult, selectedMetric),
+      unit: focusResult ? getScenarioMetricUnit(focusResult, selectedMetric) : "kg CO2e",
       kind: "standard" as const,
       summary: profile.summary,
       scheme: LABELS.standardScheme[profile.scheme]
@@ -894,13 +907,41 @@ function ScenarioComparisonBoard({
     ...standardRows.map((row) => row.value)
   ];
   const maxValue = Math.max(...allValues, 1);
+  const hasComparableScenarios = scenarios.length >= 2;
 
   return (
-    <section className="panel panel-soft">
+    <section className="panel panel-soft" id={id}>
       <div className="section-heading">
         <p className="eyebrow">Jämförelsevy</p>
         <h3>Flera varianter mot flera benchmarkprofiler</h3>
       </div>
+
+      {!hasComparableScenarios ? (
+        <div className="empty-state-workbench">
+          <article className="inline-panel">
+            <strong>Jämförelse väntar på fler scenarier</strong>
+            <span>
+              {project?.scenarios.length
+                ? "Skapa eller duplicera ett andra beräknat scenario för att låsa upp sida vid sida-jämförelse."
+                : "Skapa först ett projekt och ett scenario, sedan kan du jämföra flera alternativ här."}
+            </span>
+            <span>
+              Den här ytan är redan byggd och synlig, men kräver minst två beräknade scenarier för att bli fullt aktiv.
+            </span>
+          </article>
+          <div className="decision-actions">
+            <button type="button" className="ghost-button" disabled>
+              Välj fokusscenario
+            </button>
+            <button type="button" className="ghost-button" disabled>
+              Lägg till benchmark
+            </button>
+            <button type="button" className="submit-button" disabled>
+              Jämför scenarier
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="comparison-toolbar">
         <div className="segmented-control" role="tablist" aria-label="Jämförelsemått">
@@ -945,24 +986,21 @@ function ScenarioComparisonBoard({
         {scenarios.map((scenario) => {
           const result = scenario.latestResult as CalculationResult;
           const value = getScenarioMetricValue(result, selectedMetric);
-          const baseValue = getScenarioMetricValue(
-            focusScenario.latestResult as CalculationResult,
-            selectedMetric
-          );
+          const baseValue = focusResult ? getScenarioMetricValue(focusResult, selectedMetric) : value;
           const delta = value - baseValue;
 
           return (
             <div
               key={scenario.id}
               className={`bar-row comparison-visual-row ${
-                scenario.id === focusScenario.id ? "comparison-visual-row-active" : ""
+                scenario.id === focusScenario?.id ? "comparison-visual-row-active" : ""
               }`}
             >
               <div className="bar-copy">
                 <strong>{scenario.name}</strong>
                 <span>
                   {formatNumber(value)} {getScenarioMetricUnit(result, selectedMetric)}
-                  {scenario.id !== focusScenario.id ? ` • ${delta > 0 ? "+" : ""}${formatNumber(delta)}` : " • Bas"}
+                  {scenario.id !== focusScenario?.id ? ` • ${delta > 0 ? "+" : ""}${formatNumber(delta)}` : " • Bas"}
                 </span>
               </div>
               <div className="bar-track">
@@ -1048,6 +1086,7 @@ function ScenarioComparisonBoard({
 }
 
 function ResultMatrix({
+  id,
   title,
   scenario,
   result,
@@ -1065,6 +1104,7 @@ function ResultMatrix({
   onOpenAnalysis,
   onExplain
 }: {
+  id?: string;
   title: string;
   scenario?: Scenario | null;
   result: CalculationResult | null;
@@ -1226,7 +1266,7 @@ function ResultMatrix({
         : LABELS.urbanContext[candidateResult.mobility.inputs.urbanContext];
 
   return (
-    <section className="panel result-module">
+    <section className="panel result-module" id={id}>
       <section className="result-module-header">
         <div className="section-heading">
           <p className="eyebrow">Resultat</p>
@@ -1700,32 +1740,41 @@ function ResultMatrix({
 }
 
 function ScenarioTable({ project }: { project: Project | null }) {
-  if (!project || project.scenarios.length === 0) {
-    return null;
-  }
-
   return (
     <section className="panel panel-soft">
       <div className="section-heading">
         <p className="eyebrow">Scenarioöversikt</p>
-        <h3>{project.name}</h3>
+        <h3>{project?.name ?? "Scenarioöversikt"}</h3>
       </div>
-      <div className="scenario-table">
-        {project.scenarios.map((scenario) => (
-          <article key={scenario.id} className="scenario-row">
-            <strong>{scenario.name}</strong>
-            <span>
-              {scenario.mode === "plan" ? "Planobjekt" : "Snabbkalkyl"} • {scenario.runs?.length ?? 0} körningar
-            </span>
-            <span>
-              {scenario.latestResult
-                ? `${formatNumber(scenario.latestResult.totals.value)} kg CO2e`
-                : "Ej beräknad"}
-            </span>
-            <span>{scenario.lastCalculatedAt ? formatRunTimestamp(scenario.lastCalculatedAt) : "Inte körd"}</span>
-          </article>
-        ))}
-      </div>
+      {project && project.scenarios.length > 0 ? (
+        <div className="scenario-table">
+          {project.scenarios.map((scenario) => (
+            <article key={scenario.id} className="scenario-row">
+              <strong>{scenario.name}</strong>
+              <span>
+                {scenario.mode === "plan" ? "Planobjekt" : "Snabbkalkyl"} • {scenario.runs?.length ?? 0} körningar
+              </span>
+              <span>
+                {scenario.latestResult
+                  ? `${formatNumber(scenario.latestResult.totals.value)} kg CO2e`
+                  : "Ej beräknad"}
+              </span>
+              <span>{scenario.lastCalculatedAt ? formatRunTimestamp(scenario.lastCalculatedAt) : "Inte körd"}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state-workbench">
+          <p className="lede">
+            Här samlas alla scenarier i projektet. När du skapat det första alternativet kan du följa körhistorik,
+            beräkningar och jämförelser på samma plats.
+          </p>
+          <div className="inline-panel">
+            <strong>Inget scenario ännu</strong>
+            <span>Skapa ett scenario i arbetsytan ovan för att låsa upp denna översikt.</span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1899,7 +1948,21 @@ function ScenarioMatrixEditor({
   }
 
   if (!scenario) {
-    return null;
+    return (
+      <section className="report-card matrix-card">
+        <div className="section-heading">
+          <p className="eyebrow">Tabellinmatning</p>
+          <h3>Flera byggnader i samma scenario</h3>
+        </div>
+        <div className="empty-state-workbench">
+          <strong>Välj eller skapa ett scenario för att börja använda tabellinmatningen.</strong>
+          <span>
+            Den här vyn är redan på plats och visar flera byggnader i samma scenario när en aktiv
+            körning finns.
+          </span>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -2348,6 +2411,7 @@ export default function App() {
     parseAppRoute(window.location.pathname, window.location.search)
   );
   const [dataSources, setDataSources] = useState<DataSourcesResponse | null>(null);
+  const [apiHealth, setApiHealth] = useState<ApiHealthResponse | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [allBenchmarkProfiles, setAllBenchmarkProfiles] = useState<BenchmarkProfile[]>([]);
   const [quickForm, setQuickForm] = useState<FormState>(initialForm);
@@ -2385,6 +2449,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    fetchHealth()
+      .then((health) => setApiHealth(health))
+      .catch(() => setApiHealth(null));
+
     Promise.all([fetchDataSources(), fetchWorkspace()])
       .then(([sources, workspaceResponse]) => {
         setDataSources(sources);
@@ -2433,6 +2501,105 @@ export default function App() {
   const analysisSelectedRun = analysisContext?.scenario
     ? getActiveScenarioRun(analysisContext.scenario, route.kind === "analysis" ? route.runId : undefined)
     : null;
+  const currentScenarioRun = getActiveScenarioRun(currentScenario);
+
+  const workflowRegistry: WorkflowRegistryCard[] = [
+    {
+      order: 1,
+      id: "workspace",
+      title: "Arbetsyta",
+      summary: "Projekt, scenarier, körhistorik och scenarioeditor samlas här.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
+      actionLabel: "Till arbetsytan",
+      onAction: () => scrollToSection("workspace-panel")
+    },
+    {
+      order: 2,
+      id: "decision",
+      title: "Beslutsstöd",
+      summary: "Alternativrum för läge, form, typ, konstruktion och robusthet.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: "Tillgänglig lokalt och i preview",
+      actionLabel: "Till beslutsstöd",
+      onAction: () => scrollToSection("decision-workbench")
+    },
+    {
+      order: 3,
+      id: "three-d",
+      title: "3D och form",
+      summary: "Footprint-editor, 3D-massing och klickbar klimat-attribution.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: "Tillgänglig lokalt och i preview",
+      actionLabel: "Till 3D-vyn",
+      onAction: () => scrollToSection("building3d-panel")
+    },
+    {
+      order: 4,
+      id: "results",
+      title: "Resultat och analys",
+      summary: "Rapport, benchmark, körningshistorik och spårbar analysvy.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
+      actionLabel: "Till resultat",
+      onAction: () => scrollToSection("scenario-results")
+    },
+    {
+      order: 5,
+      id: "analysis",
+      title: "Förklarad beräkning",
+      summary: "Steg-för-steg genomgång av indata, vikter och delbidrag.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig via analysroute",
+      deployState: currentScenario ? "Tillgänglig för vald körning" : "Kräver scenario",
+      actionLabel: "Öppna analys",
+      onAction: () => {
+        if (currentScenario?.id) {
+          openAnalysis(currentScenario.id, currentScenarioRun?.id);
+        }
+      },
+      disabled: !currentScenario?.id
+    },
+    {
+      order: 6,
+      id: "compare",
+      title: "Jämförelse",
+      summary: "Benchmarkprofiler, scenario mot scenario och måttval.",
+      codeState: "Byggd i kod",
+      uiState: currentScenario ? "Synlig i UI" : "Kräver scenario",
+      deployState: currentScenario ? (apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll") : "Kräver scenario",
+      actionLabel: "Till jämförelse",
+      onAction: () => scrollToSection("comparison-board"),
+      disabled: !currentScenario
+    },
+    {
+      order: 7,
+      id: "quick",
+      title: "Snabbkalkyl",
+      summary: "Sekundärt direktläge för enstaka byggnad eller snabb screening.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
+      actionLabel: "Till snabbkalkyl",
+      onAction: () => scrollToSection("quick-workspace")
+    },
+    {
+      order: 8,
+      id: "import",
+      title: "Importflöden",
+      summary: "GeoJSON, CSV och 3D-modellimport för att fylla scenariot med data.",
+      codeState: "Byggd i kod",
+      uiState: "Synlig i UI",
+      deployState: currentScenario ? "Tillgänglig i valt scenario" : "Kräver scenario",
+      actionLabel: "Till import",
+      onAction: () => scrollToSection("import-panel"),
+      disabled: !currentScenario
+    }
+  ];
 
   useEffect(() => {
     if (workspace?.benchmarkProfiles?.length) {
@@ -2492,6 +2659,11 @@ export default function App() {
       window.history.pushState({}, "", url.toString());
     }
     setRoute(parseAppRoute(window.location.pathname, window.location.search));
+  }
+
+  function scrollToSection(id: string) {
+    const element = document.getElementById(id);
+    element?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function openAnalysis(scenarioId: string, runId?: string) {
@@ -2760,6 +2932,7 @@ export default function App() {
   ) {
     return (
       <form onSubmit={onSubmit} className="form-grid">
+        <fieldset className="form-grid-fieldset" disabled={disabled}>
         <label>
           Byggnadstyp
           <select
@@ -3326,6 +3499,7 @@ export default function App() {
         <button type="submit" className="submit-button" disabled={disabled}>
           {submitLabel}
         </button>
+        </fieldset>
       </form>
     );
   }
@@ -3429,7 +3603,52 @@ export default function App() {
         </div>
       </section>
 
-      <section className="panel workspace-panel">
+      <section className="panel feature-coverage-panel">
+        <div className="section-heading">
+          <p className="eyebrow">Funktionstäckning</p>
+          <h2>Alla byggda lager synliga i samma workbench</h2>
+          <p className="lede">
+            Snabb väg till arbetsyta, beslut, analys, 3D/form, resultat och jämförelser. Statusfältet visar vad som är
+            laddat, vad som finns i UI och vad som går att verifiera i preview.
+          </p>
+        </div>
+        <div className="feature-status-row">
+          <span>API: {apiHealth?.ok ? "Online" : "Okänd"}</span>
+          <span>PERSISTENS: {apiHealth?.persistence.mode ?? "Okänd"}</span>
+          <span>Workspace: {workspace ? "Laddad" : "Väntar"}</span>
+          <span>Scenario: {currentScenario ? "Aktivt" : "Saknas"}</span>
+        </div>
+        <div className="feature-coverage-grid" aria-label="Funktionstäckning">
+          {workflowRegistry
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((card) => (
+            <article key={card.id} className="feature-coverage-card">
+              <div className="feature-coverage-card-head">
+                <div>
+                  <p className="eyebrow">{card.codeState}</p>
+                  <h3>{card.title}</h3>
+                </div>
+                <span className="feature-coverage-chip">{card.uiState}</span>
+              </div>
+              <p className="microcopy">{card.summary}</p>
+              <div className="feature-coverage-meta">
+                <span>{card.deployState}</span>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={card.onAction}
+                disabled={card.disabled}
+              >
+                {card.actionLabel}
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel workspace-panel" id="workspace-panel">
         <div className="section-heading">
           <p className="eyebrow">Arbetsyta</p>
           <h2>Projektinfo och scenarioeditor i full bredd</h2>
@@ -3583,6 +3802,7 @@ export default function App() {
         <ScenarioTable project={currentProject} />
 
         <DecisionWorkbench
+          id="decision-workbench"
           project={currentProject}
           selectedMetric={selectedComparisonMetric}
           activeScenarioId={currentScenario?.id}
@@ -3594,10 +3814,9 @@ export default function App() {
           onOpenAnalysis={openAnalysis}
         />
 
-        {currentScenario ? (
-          <>
+        <>
             <section className="support-grid">
-              <section className="report-card">
+              <section className="report-card" id="import-panel">
                 <div className="section-heading">
                   <p className="eyebrow">Import</p>
                   <h3>GeoJSON eller CSV</h3>
@@ -3610,10 +3829,22 @@ export default function App() {
                   `interventionType`, `existingGrossFloorAreaM2`, `retainedStructureSharePct`,
                   `addedGrossFloorAreaM2` och `retrofitDepth`.
                 </p>
-                <input type="file" accept=".json,.geojson,.csv" onChange={handleImportFile} />
-                <p className="microcopy">
-                  CSV-import visas utan polygoner men kan fortfarande räknas och jämföras.
-                </p>
+                <input
+                  type="file"
+                  accept=".json,.geojson,.csv"
+                  onChange={handleImportFile}
+                  disabled={!currentScenario}
+                />
+                {currentScenario ? (
+                  <p className="microcopy">
+                    CSV-import visas utan polygoner men kan fortfarande räknas och jämföras.
+                  </p>
+                ) : (
+                  <div className="empty-state-workbench">
+                    <span>Importen låses upp när ett scenario är valt eller skapat.</span>
+                    <span>Här kan du sedan läsa in GeoJSON eller CSV och direkt få nytt resultat.</span>
+                  </div>
+                )}
               </section>
 
               <section className="report-card">
@@ -3685,7 +3916,10 @@ export default function App() {
                     </button>
                   </div>
                 ) : (
-                  <p className="microcopy">Skapa minst två scenarier i projektet för att jämföra.</p>
+                  <div className="empty-state-workbench">
+                    <span>Skapa minst två scenarier i projektet för att jämföra.</span>
+                    <span>När det finns två beräknade alternativ visas jämförelsen här utan att du behöver lämna sidan.</span>
+                  </div>
                 )}
               </section>
             </section>
@@ -3693,16 +3927,16 @@ export default function App() {
             <section className="panel panel-form">
               <div className="section-heading">
                 <p className="eyebrow">Scenarioeditor</p>
-                <h2>{currentScenario.name}</h2>
+                <h2>{currentScenario?.name ?? "Välj scenario för att redigera"}</h2>
               </div>
               <div className="toolbar-row">
                 <span className="badge">
-                  {currentScenario.mode === "plan" ? "Planobjektläge" : "Snabbt scenario"}
+                  {currentScenario ? (currentScenario.mode === "plan" ? "Planobjektläge" : "Snabbt scenario") : "Scenario låst"}
                 </span>
-                <button type="button" className="ghost-button" onClick={handleDuplicateScenario}>
+                <button type="button" className="ghost-button" onClick={handleDuplicateScenario} disabled={!currentScenario}>
                   Duplicera scenario
                 </button>
-                {scenarioResult ? (
+                {scenarioResult && currentScenario ? (
                   <>
                     <button
                       type="button"
@@ -3726,24 +3960,34 @@ export default function App() {
               <ScenarioMatrixEditor
                 scenario={currentScenario}
                 onImportRows={handleMatrixImportRows}
-                disabled={isScenarioSubmitting}
+                disabled={isScenarioSubmitting || !currentScenario}
               />
               <Building3DViewer
+                id="building3d-panel"
                 scenario={currentScenario}
                 result={scenarioResult}
-                onExplain={(traceKey) => openExplanation(currentScenario.latestResult ?? scenarioResult, traceKey)}
+                onExplain={(traceKey) =>
+                  openExplanation(currentScenario?.latestResult ?? scenarioResult, traceKey)
+                }
                 onScenarioRefresh={() => refreshWorkspace(currentProject?.organizationId ?? selectedOrganizationId)}
               />
-              {renderCalculationForm(
-                scenarioForm,
-                updateScenarioForm,
-                handleScenarioCalculate,
-                isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
-                isScenarioSubmitting
+              {currentScenario ? (
+                renderCalculationForm(
+                  scenarioForm,
+                  updateScenarioForm,
+                  handleScenarioCalculate,
+                  isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
+                  isScenarioSubmitting
+                )
+              ) : (
+                <div className="empty-state-workbench">
+                  <strong>Välj eller skapa ett scenario för att låsa upp kalkylformuläret.</strong>
+                  <span>Byggnadsdata, import och 3D-vy finns redan här men blir redigerbara först när ett scenario är aktivt.</span>
+                </div>
               )}
             </section>
 
-            {currentScenario.planObjects.length ? (
+            {currentScenario?.planObjects.length ? (
               <section className="panel panel-soft">
                 <div className="section-heading">
                   <p className="eyebrow">Planobjekt</p>
@@ -3762,9 +4006,21 @@ export default function App() {
                   ))}
                 </div>
               </section>
-            ) : null}
+            ) : (
+              <section className="panel panel-soft">
+                <div className="section-heading">
+                  <p className="eyebrow">Planobjekt</p>
+                  <h3>Importerade objekt</h3>
+                </div>
+                <div className="empty-state-workbench">
+                  <strong>Inga planobjekt är importerade ännu.</strong>
+                  <span>Så snart du laddar in GeoJSON eller tabellrader visas byggnaderna här och följer med i resultatet.</span>
+                </div>
+              </section>
+            )}
 
             <ResultMatrix
+              id="scenario-results"
               title="Kommunalt scenarioresultat"
               scenario={currentScenario}
               result={scenarioResult}
@@ -3784,6 +4040,7 @@ export default function App() {
             />
 
             <ScenarioComparisonBoard
+              id="comparison-board"
               project={currentProject}
               benchmarkProfiles={allBenchmarkProfiles}
               standardProfiles={dataSources?.standardProfiles ?? []}
@@ -3796,15 +4053,9 @@ export default function App() {
               onMetricChange={setSelectedComparisonMetric}
             />
           </>
-        ) : (
-          <div className="empty-state">
-            <strong>Skapa ett projekt och ett scenario för att börja.</strong>
-            <p>Scenarioflödet låter dig spara alternativ, importera planobjekt och jämföra mot målvärden.</p>
-          </div>
-        )}
       </section>
 
-      <section className="panel secondary-workspace">
+      <section className="panel secondary-workspace" id="quick-workspace">
         <div className="section-heading">
           <p className="eyebrow">Snabbkalkyl</p>
           <h2>Sekundärt direktläge för enskild byggnad</h2>

@@ -36,7 +36,19 @@ export function BenchmarkPositionChart({
   rows
 }: BenchmarkPositionChartProps) {
   if (rows.length === 0) {
-    return null;
+    return (
+      <section className="report-card">
+        <div className="section-heading">
+          <p className="eyebrow">Benchmarkdiagram</p>
+          <h3>{title}</h3>
+        </div>
+        <div className="empty-state-workbench">
+          <p className="microcopy">
+            Inga benchmarkvärden är valda ännu. Välj minst en benchmark- eller standardprofil för att visa diagrammet.
+          </p>
+        </div>
+      </section>
+    );
   }
 
   const maxValue = Math.max(...rows.map((row) => row.value), 1);

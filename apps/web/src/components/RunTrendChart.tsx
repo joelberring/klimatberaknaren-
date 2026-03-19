@@ -15,7 +15,19 @@ interface RunTrendChartProps {
 
 export function RunTrendChart({ title, unit, points }: RunTrendChartProps) {
   if (points.length === 0) {
-    return null;
+    return (
+      <section className="report-card">
+        <div className="section-heading">
+          <p className="eyebrow">Trenddiagram</p>
+          <h3>{title}</h3>
+        </div>
+        <div className="empty-state-workbench">
+          <p className="microcopy">
+            Inga sparade körningar finns ännu för detta scenario. När du beräknar flera gånger visas trenden här.
+          </p>
+        </div>
+      </section>
+    );
   }
 
   const width = 320;

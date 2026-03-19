@@ -33,6 +33,7 @@ interface LocalModelSource {
 }
 
 interface Building3DViewerProps {
+  id?: string;
   scenario: Scenario | null;
   result: CalculationResult | null;
   onExplain: (traceKey: string) => void;
@@ -178,6 +179,7 @@ function createMassingRoot(draft: FootprintShapeDraft) {
 }
 
 export function Building3DViewer({
+  id,
   scenario,
   result,
   onExplain,
@@ -662,7 +664,7 @@ export function Building3DViewer({
   }
 
   return (
-    <section className="panel panel-soft building3d-panel">
+    <section className="panel panel-soft building3d-panel" id={id}>
       <div className="section-heading">
         <p className="eyebrow">3D-modell</p>
         <h3>GeoJSON + GLB/GLTF med klickbar klimat-attribution</h3>

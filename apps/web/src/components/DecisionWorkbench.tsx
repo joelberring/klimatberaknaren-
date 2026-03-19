@@ -8,6 +8,7 @@ import {
 } from "../lib/decisionSupport";
 
 interface DecisionWorkbenchProps {
+  id?: string;
   project: Project | null;
   selectedMetric: ComparisonMetric;
   activeScenarioId?: string;
@@ -59,6 +60,7 @@ function scenarioRows(scenarios: Scenario[]) {
 }
 
 export function DecisionWorkbench({
+  id,
   project,
   selectedMetric,
   activeScenarioId,
@@ -73,15 +75,12 @@ export function DecisionWorkbench({
     () => buildDecisionSummaries(eligibleScenarios, selectedMetric, objective),
     [eligibleScenarios, selectedMetric, objective]
   );
-
-  if (!project || summaries.length === 0) {
-    return null;
-  }
-
-  const topSummary = summaries[0];
+  const canRank = Boolean(project && summaries.length > 0);
+  const scenarioCount = project?.scenarios.length ?? 0;
+  const topSummary = canRank ? summaries[0] : null;
 
   return (
-    <section className="panel decision-workbench">
+    <section className="panel decision-workbench" id={id}>
       <div className="section-heading">
         <p className="eyebrow">Tidigt skede</p>
         <h2>Alternativrum för läge, form, typ och konstruktion</h2>
@@ -101,145 +100,193 @@ export function DecisionWorkbench({
           >
             {DECISION_OBJECTIVE_LABELS[value]}
           </button>
-        ))}
+          ))}
       </div>
 
-      <div className="decision-summary-strip">
-        <article className="inline-panel">
-          <strong>Bäst för {DECISION_OBJECTIVE_LABELS[objective].toLowerCase()}</strong>
-          <span>{topSummary.scenarioName}</span>
-          <span>
-            Poäng {formatNumber(topSummary.objectiveScore)} • {scoreLabel(topSummary.objectiveScore)}
-          </span>
-        </article>
-        <article className="inline-panel">
-          <strong>Aktivt scenario</strong>
-          <span>
-            {topSummary.scenarioId === activeScenarioId ? topSummary.scenarioName : "Välj ett alternativ i listan"}
-          </span>
-          <span>{objectiveDescription(objective)}</span>
-        </article>
-        <article className="inline-panel">
-          <strong>Riktningssignal</strong>
-          <span>{topSummary.recommendation}</span>
-          <span>{topSummary.rationale[1] ?? topSummary.rationale[0]}</span>
-        </article>
-      </div>
+      {canRank && topSummary ? (
+        <>
+          <div className="decision-summary-strip">
+            <article className="inline-panel">
+              <strong>Bäst för {DECISION_OBJECTIVE_LABELS[objective].toLowerCase()}</strong>
+              <span>{topSummary.scenarioName}</span>
+              <span>
+                Poäng {formatNumber(topSummary.objectiveScore)} • {scoreLabel(topSummary.objectiveScore)}
+              </span>
+            </article>
+            <article className="inline-panel">
+              <strong>Aktivt scenario</strong>
+              <span>
+                {topSummary.scenarioId === activeScenarioId ? topSummary.scenarioName : "Välj ett alternativ i listan"}
+              </span>
+              <span>{objectiveDescription(objective)}</span>
+            </article>
+            <article className="inline-panel">
+              <strong>Riktningssignal</strong>
+              <span>{topSummary.recommendation}</span>
+              <span>{topSummary.rationale[1] ?? topSummary.rationale[0]}</span>
+            </article>
+          </div>
 
-      <div className="decision-grid">
-        {summaries.slice(0, 10).map((summary, index) => (
-          <article
-            key={summary.scenarioId}
-            className={`decision-card ${
-              summary.scenarioId === activeScenarioId ? "decision-card-active" : ""
-            } ${index === 0 ? "decision-card-winner" : ""}`}
-          >
-            <div className="decision-card-head">
-              <div>
-                <p className="eyebrow">Rang {index + 1}</p>
-                <h3>{summary.scenarioName}</h3>
-              </div>
-              <div className="decision-score">
-                <strong>{formatNumber(summary.objectiveScore)}</strong>
-                <span>{summary.objectiveLabel}</span>
-              </div>
-            </div>
-
-            <div className="decision-chip-row">
-              <span className="decision-chip">{summary.labels.buildingType}</span>
-              <span className="decision-chip">{summary.labels.buildingForm}</span>
-              <span className="decision-chip">{summary.labels.urbanContext}</span>
-              <span className="decision-chip">{summary.labels.frameMaterial}</span>
-            </div>
-
-            <div className="decision-signal-grid">
-              {summary.signals.map((signal) => (
-                <div key={`${summary.scenarioId}-${signal.category}`} className="decision-signal">
-                  <div className="decision-signal-head">
-                    <strong>{signal.title}</strong>
-                    <span>{formatNumber(signal.score)}</span>
+          <div className="decision-grid">
+            {summaries.slice(0, 10).map((summary, index) => (
+              <article
+                key={summary.scenarioId}
+                className={`decision-card ${
+                  summary.scenarioId === activeScenarioId ? "decision-card-active" : ""
+                } ${index === 0 ? "decision-card-winner" : ""}`}
+              >
+                <div className="decision-card-head">
+                  <div>
+                    <p className="eyebrow">Rang {index + 1}</p>
+                    <h3>{summary.scenarioName}</h3>
                   </div>
-                  <div className="decision-progress" aria-hidden="true">
-                    <span style={{ width: `${signal.score}%` }} />
+                  <div className="decision-score">
+                    <strong>{formatNumber(summary.objectiveScore)}</strong>
+                    <span>{summary.objectiveLabel}</span>
                   </div>
-                  <span className="microcopy">{signal.note}</span>
+                </div>
+
+                <div className="decision-chip-row">
+                  <span className="decision-chip">{summary.labels.buildingType}</span>
+                  <span className="decision-chip">{summary.labels.buildingForm}</span>
+                  <span className="decision-chip">{summary.labels.urbanContext}</span>
+                  <span className="decision-chip">{summary.labels.frameMaterial}</span>
+                </div>
+
+                <div className="decision-signal-grid">
+                  {summary.signals.map((signal) => (
+                    <div key={`${summary.scenarioId}-${signal.category}`} className="decision-signal">
+                      <div className="decision-signal-head">
+                        <strong>{signal.title}</strong>
+                        <span>{formatNumber(signal.score)}</span>
+                      </div>
+                      <div className="decision-progress" aria-hidden="true">
+                        <span style={{ width: `${signal.score}%` }} />
+                      </div>
+                      <span className="microcopy">{signal.note}</span>
+                      <ul className="decision-detail-list">
+                        {signal.details.map((detail) => (
+                          <li key={detail}>{detail}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="decision-summary-meta">
+                  <strong>
+                    {formatNumber(summary.climateValue)} {summary.climateUnit}
+                  </strong>
+                  <span>{summary.benchmarkGap ?? "Ingen benchmark tillgänglig"}</span>
+                </div>
+
+                <div className="decision-typology">
+                  <strong>Typologipreset</strong>
+                  <span>{summary.typology.label}</span>
+                  <span className="microcopy">{summary.typology.note}</span>
                   <ul className="decision-detail-list">
-                    {signal.details.map((detail) => (
-                      <li key={detail}>{detail}</li>
+                    {summary.typology.defaults.map((item) => (
+                      <li key={`${summary.scenarioId}-${item}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
-              ))}
-            </div>
 
-            <div className="decision-summary-meta">
-              <strong>
-                {formatNumber(summary.climateValue)} {summary.climateUnit}
-              </strong>
-              <span>{summary.benchmarkGap ?? "Ingen benchmark tillgänglig"}</span>
-            </div>
+                <div className="decision-actions">
+                  <button type="button" className="ghost-button" onClick={() => onSelectScenario(summary.scenarioId)}>
+                    Välj
+                  </button>
+                  {onOpenAnalysis ? (
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => onOpenAnalysis(summary.scenarioId, summary.runId)}
+                    >
+                      Visa alternativanalys
+                    </button>
+                  ) : null}
+                  <button type="button" className="submit-button" onClick={() => void onDuplicateScenario(summary.scenarioId)}>
+                    Duplicera
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
 
-            <div className="decision-typology">
-              <strong>Typologipreset</strong>
-              <span>{summary.typology.label}</span>
-              <span className="microcopy">{summary.typology.note}</span>
-              <ul className="decision-detail-list">
-                {summary.typology.defaults.map((item) => (
-                  <li key={`${summary.scenarioId}-${item}`}>{item}</li>
-                ))}
-              </ul>
+          <div className="decision-matrix">
+            <div className="decision-matrix-row decision-matrix-head">
+              <span>Scenario</span>
+              <span>Klimat</span>
+              <span>Läge</span>
+              <span>Form</span>
+              <span>Konstruktion</span>
+              <span>Robusthet</span>
+              <span>Benchmark</span>
             </div>
-
-            <div className="decision-actions">
-              <button type="button" className="ghost-button" onClick={() => onSelectScenario(summary.scenarioId)}>
-                Välj
+            {summaries.map((summary) => (
+              <button
+                type="button"
+                key={`${summary.scenarioId}-matrix`}
+                className={`decision-matrix-row ${
+                  summary.scenarioId === activeScenarioId ? "decision-matrix-row-active" : ""
+                }`}
+                onClick={() => onSelectScenario(summary.scenarioId)}
+              >
+                <strong>{summary.scenarioName}</strong>
+                <span>{formatNumber(summary.climateScore)}</span>
+                <span>{formatNumber(summary.locationScore)}</span>
+                <span>{formatNumber(summary.formScore)}</span>
+                <span>{formatNumber(summary.constructionScore)}</span>
+                <span>{formatNumber(summary.robustnessScore)}</span>
+                <span>{summary.benchmarkGap ?? "—"}</span>
               </button>
-              {onOpenAnalysis ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => onOpenAnalysis(summary.scenarioId, summary.runId)}
-                >
-                  Visa alternativanalys
-                </button>
-              ) : null}
-              <button type="button" className="submit-button" onClick={() => void onDuplicateScenario(summary.scenarioId)}>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty-state-workbench">
+          <article className="inline-panel">
+            <strong>Beslutsstöd väntar på fler scenarier</strong>
+            <span>
+              {scenarioCount === 0
+                ? "Skapa först ett projekt och ett scenario så kan vi rangordna alternativen."
+                : "Lägg till minst ett beräknat scenario till så visas ranking, signalsystem och typologipresets."}
+            </span>
+            <span>{objectiveDescription(objective)}</span>
+          </article>
+          <div className="decision-actions">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                const firstScenario = project?.scenarios[0];
+                if (firstScenario) {
+                  onSelectScenario(firstScenario.id);
+                }
+              }}
+              disabled={!project?.scenarios[0]}
+            >
+              Välj första scenario
+            </button>
+            {onOpenAnalysis ? (
+              <button type="button" className="ghost-button" disabled>
+                Visa alternativanalys
+              </button>
+            ) : null}
+            {project?.scenarios[0] ? (
+              <button type="button" className="submit-button" onClick={() => void onDuplicateScenario(project.scenarios[0].id)}>
+                Duplicera första
+              </button>
+            ) : (
+              <button type="button" className="submit-button" disabled>
                 Duplicera
               </button>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <div className="decision-matrix">
-        <div className="decision-matrix-row decision-matrix-head">
-          <span>Scenario</span>
-          <span>Klimat</span>
-          <span>Läge</span>
-          <span>Form</span>
-          <span>Konstruktion</span>
-          <span>Robusthet</span>
-          <span>Benchmark</span>
+            )}
+          </div>
+          <p className="microcopy">
+            När minst ett beräknat scenario finns här visas ranking, signalsystem och typologipresets utan att du behöver lämna sidan.
+          </p>
         </div>
-        {summaries.map((summary) => (
-          <button
-            type="button"
-            key={`${summary.scenarioId}-matrix`}
-            className={`decision-matrix-row ${
-              summary.scenarioId === activeScenarioId ? "decision-matrix-row-active" : ""
-            }`}
-            onClick={() => onSelectScenario(summary.scenarioId)}
-          >
-            <strong>{summary.scenarioName}</strong>
-            <span>{formatNumber(summary.climateScore)}</span>
-            <span>{formatNumber(summary.locationScore)}</span>
-            <span>{formatNumber(summary.formScore)}</span>
-            <span>{formatNumber(summary.constructionScore)}</span>
-            <span>{formatNumber(summary.robustnessScore)}</span>
-            <span>{summary.benchmarkGap ?? "—"}</span>
-          </button>
-        ))}
-      </div>
+      )}
     </section>
   );
 }
