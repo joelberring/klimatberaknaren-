@@ -6,6 +6,7 @@ import App from "./App";
 
 const fetchMock = vi.fn();
 let workspacePayload: TestWorkspacePayload;
+const SCENARIO_ACCESS_STORAGE_KEY = "climate-calculator.scenario-access";
 
 interface TestSession {
   email: string;
@@ -349,6 +350,7 @@ function renderAt(pathname: string) {
 
 describe("App", () => {
   beforeEach(() => {
+    window.localStorage.setItem(SCENARIO_ACCESS_STORAGE_KEY, "unlocked");
     workspacePayload = {
       session: null,
       organizations: [
@@ -777,13 +779,15 @@ describe("App", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    window.localStorage.clear();
     window.history.pushState({}, "", "/");
   });
 
   it("shows a short chooser on the home route", async () => {
     renderAt("/");
 
-    expect(await screen.findByText(/välj arbetsläge/i)).toBeInTheDocument();
+    expect(await screen.findByText(/klimatberäknaren/i)).toBeInTheDocument();
+    expect(screen.getByText(/ett verktyg för tidiga skeden/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /öppna snabbkalkyl/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /öppna scenario \/ projekt/i })).toBeInTheDocument();
 
@@ -824,19 +828,29 @@ describe("App", () => {
   });
 
   it("shows locked scenario workbench states before a scenario exists", async () => {
+    window.localStorage.removeItem(SCENARIO_ACCESS_STORAGE_KEY);
     renderAt("/scenario");
 
-    await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
-    expect(screen.queryByText(/resultat för snabbkalkyl/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/välj scenario för att redigera/i)).toBeInTheDocument();
-    expect(screen.getByText(/scenario låst/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/importen låses upp när ett scenario är valt eller skapat/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/jämförelse väntar på fler scenarier/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/välj eller skapa ett scenario för att börja använda tabellinmatningen/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/scenario är låst/i)).toBeInTheDocument();
+    expect(screen.getByText(/ange lösenordet för att fortsätta till scenarioläget/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /öppna scenario \/ projekt/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/scenario-lösenord/i)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/scenario-lösenord/i), "felkod");
+    await userEvent.click(screen.getByRole("button", { name: /öppna scenario \/ projekt/i }));
+
+    expect(await screen.findByText(/fel lösenord\. prova stockholm\./i)).toBeInTheDocument();
+  });
+
+  it("unlocks the scenario route with the Stockholm passcode", async () => {
+    window.localStorage.removeItem(SCENARIO_ACCESS_STORAGE_KEY);
+    renderAt("/scenario");
+
+    await userEvent.type(screen.getByLabelText(/scenario-lösenord/i), "Stockholm");
+    await userEvent.click(screen.getByRole("button", { name: /öppna scenario \/ projekt/i }));
+
+    expect(await screen.findByText(/välj scenario för att redigera/i)).toBeInTheDocument();
+    expect(screen.queryByText(/scenario är låst/i)).not.toBeInTheDocument();
   });
 
   it("opens the workspace, creates a project and scenario, then shows benchmarked scenario results", async () => {
@@ -872,6 +886,11 @@ describe("App", () => {
     expect(screen.getByText(/geojson \+ glb\/gltf med klickbar klimat-attribution/i)).toBeInTheDocument();
     expect(screen.getAllByText(/normal/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/minska stommens klimatavtryck/i)).toBeInTheDocument();
+
+    const stockholmQuickSelect = await screen.findByRole("button", { name: /fyll stockholm/i });
+    await userEvent.click(stockholmQuickSelect);
+    expect(screen.getByLabelText(/latitud valfritt/i)).toHaveValue(59.3293);
+    expect(screen.getByLabelText(/longitud valfritt/i)).toHaveValue(18.0686);
 
     await userEvent.click(screen.getByRole("button", { name: /visa analys/i }));
     expect(await screen.findByText(/separat analysvy/i)).toBeInTheDocument();
@@ -926,6 +945,7 @@ describe("App", () => {
     await userEvent.type(screen.getByPlaceholderText(/tät struktur a/i), "Tabellscenario");
     await userEvent.click(screen.getByRole("button", { name: /skapa scenario/i }));
 
+    await userEvent.click(screen.getByRole("button", { name: /flera byggnader/i }));
     const matrixCard = await screen.findByText(/flera byggnader i samma scenario/i);
     await userEvent.click(
       within(matrixCard.closest("section") ?? matrixCard.parentElement ?? document.body).getByRole("button", {

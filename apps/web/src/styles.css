@@ -164,6 +164,27 @@ a:focus-visible {
   min-width: 16rem;
 }
 
+.mode-card .scenario-access-form {
+  gap: 0.6rem;
+}
+
+.mode-card .scenario-access-form .submit-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.scenario-gate-panel,
+.scenario-access-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.scenario-access-status {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .feature-status-row {
   display: flex;
   flex-wrap: wrap;
@@ -217,6 +238,19 @@ a:focus-visible {
 .workflow-step-body {
   display: grid;
   gap: 0.55rem;
+}
+
+.quick-location-preset {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.quick-location-preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
 }
 
 .workflow-step-meta {

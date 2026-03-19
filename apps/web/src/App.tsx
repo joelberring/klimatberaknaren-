@@ -29,7 +29,7 @@ import {
   type UserSession,
   type WorkspaceResponse
 } from "../../../packages/shared/src";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
   calculateClimateImpact,
@@ -102,6 +102,13 @@ interface FormState {
   addedGrossFloorAreaM2: string;
   addedFloors: string;
 }
+
+const STOCKHOLM_LOCATION_PRESET = {
+  lat: "59.3293",
+  lon: "18.0686"
+} as const;
+const SCENARIO_ACCESS_STORAGE_KEY = "climate-calculator.scenario-access";
+const SCENARIO_ACCESS_CODE = "stockholm";
 
 const initialForm: FormState = {
   buildingType: "flerbostadshus",
@@ -195,6 +202,10 @@ function toNumber(value: string) {
   }
 
   return Number(value.replace(",", "."));
+}
+
+function normalizeScenarioAccessCode(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function payloadToForm(payload?: CalculateRequest): FormState {
@@ -2462,6 +2473,16 @@ export default function App() {
   const [selectedStandardIds, setSelectedStandardIds] = useState<string[]>([]);
   const [selectedBaseRunId, setSelectedBaseRunId] = useState("");
   const [selectedCandidateRunId, setSelectedCandidateRunId] = useState("");
+  const [scenarioEditorMode, setScenarioEditorMode] = useState<"single" | "multi">("single");
+  const [scenarioAccessCode, setScenarioAccessCode] = useState("");
+  const [scenarioAccessError, setScenarioAccessError] = useState<string | null>(null);
+  const [isScenarioUnlocked, setIsScenarioUnlocked] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(SCENARIO_ACCESS_STORAGE_KEY) === "unlocked";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const handlePopState = () => {
@@ -2508,6 +2529,18 @@ export default function App() {
     currentProject?.scenarios.find((scenario) => scenario.id === selectedScenarioId) ??
     currentProject?.scenarios[0] ??
     null;
+
+  useEffect(() => {
+    if (!currentScenario) {
+      setScenarioEditorMode("single");
+      return;
+    }
+
+    setScenarioEditorMode(
+      currentScenario.mode === "plan" || currentScenario.planObjects.length > 0 ? "multi" : "single"
+    );
+  }, [currentScenario?.id, currentScenario?.mode, currentScenario?.planObjects.length]);
+
   const analysisContext = useMemo(() => {
     if (route.kind !== "analysis") {
       return null;
@@ -2537,6 +2570,44 @@ export default function App() {
       });
     }
   }, [workspace?.benchmarkProfiles]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SCENARIO_ACCESS_STORAGE_KEY,
+        isScenarioUnlocked ? "unlocked" : "locked"
+      );
+    } catch {
+      // ignore storage issues in restricted environments
+    }
+  }, [isScenarioUnlocked]);
+
+  function unlockScenarioAccess(code: string) {
+    if (normalizeScenarioAccessCode(code) === SCENARIO_ACCESS_CODE) {
+      setIsScenarioUnlocked(true);
+      setScenarioAccessError(null);
+      setScenarioAccessCode("");
+      return true;
+    }
+
+    setScenarioAccessError("Fel lösenord. Prova Stockholm.");
+    return false;
+  }
+
+  function handleScenarioAccessSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!isScenarioUnlocked && !unlockScenarioAccess(scenarioAccessCode)) {
+      return;
+    }
+
+    setScenarioAccessError(null);
+    setScenarioAccessCode("");
+
+    if (route.kind !== "scenario") {
+      navigateTo(buildScenarioPath());
+    }
+  }
 
   useEffect(() => {
     if (currentProject && currentProject.id !== selectedProjectId) {
@@ -2945,6 +3016,11 @@ export default function App() {
     submitLabel: string,
     disabled = false
   ) {
+    function applyStockholmLocationPreset() {
+      update("siteLat", STOCKHOLM_LOCATION_PRESET.lat as FormState["siteLat"]);
+      update("siteLon", STOCKHOLM_LOCATION_PRESET.lon as FormState["siteLon"]);
+    }
+
     return (
       <form onSubmit={onSubmit} className="form-grid">
         <fieldset className="form-grid-fieldset" disabled={disabled}>
@@ -3429,6 +3505,19 @@ export default function App() {
                   />
                   <span className="microcopy">Använd tillsammans med latitud för automatisk tillgänglighetsklassning.</span>
                 </label>
+                <div className="full-width quick-location-preset">
+                  <span className="microcopy">Snabbval för platsdata</span>
+                  <div className="quick-location-preset-actions">
+                    <button
+                      type="button"
+                      className="ghost-button ghost-button-small"
+                      onClick={applyStockholmLocationPreset}
+                    >
+                      Fyll Stockholm
+                    </button>
+                    <span className="microcopy">Fyller koordinater för Stockholms centrum.</span>
+                  </div>
+                </div>
                 <label>
                   Parkeringsplatser
                   <input
@@ -3564,20 +3653,57 @@ export default function App() {
     navigateTo(buildAnalysisPath(analysisContext.scenario.id, runId), true);
   }
 
+  function renderScenarioAccessForm() {
+    return (
+      <form className="scenario-access-form" onSubmit={handleScenarioAccessSubmit}>
+        <label>
+          Scenario-lösenord
+          <input
+            type="password"
+            value={scenarioAccessCode}
+            onChange={(event) => {
+              setScenarioAccessCode(event.target.value);
+              if (scenarioAccessError) {
+                setScenarioAccessError(null);
+              }
+            }}
+            placeholder="Stockholm"
+            autoComplete="off"
+          />
+        </label>
+        <p className="microcopy">
+          Ange koden för att öppna scenario, historik, import, analys och jämförelse.
+        </p>
+        {scenarioAccessError ? (
+          <p className="form-error" role="alert">
+            {scenarioAccessError}
+          </p>
+        ) : isScenarioUnlocked ? (
+          <p className="scenario-access-status" aria-live="polite">
+            Scenario är upplåst i den här webbläsaren.
+          </p>
+        ) : null}
+        <button type="submit" className="submit-button">
+          Öppna scenario / projekt
+        </button>
+      </form>
+    );
+  }
+
   function renderChooserPage() {
     return (
       <div className="app-shell mode-shell">
         <section className="panel intro-strip chooser-strip">
           <div className="intro-title">
             <p className="eyebrow">Start</p>
-            <h1>Välj arbetsläge</h1>
+            <h1>Klimatberäknaren</h1>
             <p className="lede">
-              Börja med snabbkalkyl för ett enskilt koncept eller scenario / projekt för alternativ,
-              historik, analys och jämförelse.
+              Ett verktyg för tidiga skeden där du kan välja snabbkalkyl för ett enskilt koncept eller
+              scenario / projekt för alternativ, historik, analys och jämförelse.
             </p>
           </div>
           <div className="intro-meta-row">
-            <span>Två tydliga ingångar</span>
+            <span>Snabbkalkyl eller scenario</span>
             <span>Samma beräkningsmotor bakom kulisserna</span>
             <span>Icke-relevanta delar döljs helt per läge</span>
           </div>
@@ -3620,19 +3746,15 @@ export default function App() {
                   <p className="eyebrow">Scenario / projekt</p>
                   <h3>Alternativ och analys</h3>
                 </div>
-                <span className="feature-coverage-chip">Huvudläge</span>
+                <span className="feature-coverage-chip">
+                  {isScenarioUnlocked ? "Upplåst" : "Kod krävs"}
+                </span>
               </div>
               <p className="microcopy">
                 För flera scenarier, körhistorik, 3D/form, import och analyser där du behöver jämföra
                 och förklara val.
               </p>
-              <button
-                type="button"
-                className="submit-button"
-                onClick={() => navigateTo(buildScenarioPath())}
-              >
-                Öppna scenario / projekt
-              </button>
+              {renderScenarioAccessForm()}
             </article>
           </div>
         </section>
@@ -3644,6 +3766,56 @@ export default function App() {
             <span>Workspace: {workspace ? "Laddad" : "Väntar"}</span>
             <span>Scenario: {currentScenario ? "Aktivt" : "Saknas"}</span>
           </div>
+        </section>
+
+        {workspaceError ? (
+          <p className="floating-error" role="alert">
+            {workspaceError}
+          </p>
+        ) : null}
+
+        <ExplanationDrawer explanation={activeExplanation} onClose={() => setActiveExplanation(null)} />
+      </div>
+    );
+  }
+
+  function renderScenarioAccessPage() {
+    return (
+      <div className="app-shell mode-shell">
+        <section className="panel intro-strip chooser-strip">
+          <div className="intro-title">
+            <p className="eyebrow">Scenario / projekt</p>
+            <h1>Scenario är låst</h1>
+            <p className="lede">
+              Ange koden för att öppna projekt, historik, import, analys och jämförelse. Snabbkalkyl
+              fortsätter att fungera utan lösenord.
+            </p>
+          </div>
+          <div className="intro-actions">
+            <button type="button" className="ghost-button" onClick={() => navigateTo(buildHomePath())}>
+              Till väljaren
+            </button>
+            <button type="button" className="ghost-button" onClick={() => navigateTo(buildQuickPath())}>
+              Till snabbkalkyl
+            </button>
+          </div>
+          <div className="intro-meta-row">
+            <span>Koden minns i den här webbläsaren</span>
+            <span>Scenario visar projekt, historik och analys</span>
+            <span>Snabbkalkyl är fortfarande direkt åtkomlig</span>
+          </div>
+        </section>
+
+        <section className="panel chooser-panel scenario-gate-panel">
+          <div className="section-heading">
+            <p className="eyebrow">Låst läge</p>
+            <h2>Öppna scenario / projekt</h2>
+            <p className="lede">
+              Ange lösenordet för att fortsätta till scenarioläget. Vi låser bara scenarioflödet,
+              inte snabbkalkylen.
+            </p>
+          </div>
+          {renderScenarioAccessForm()}
         </section>
 
         {workspaceError ? (
@@ -3792,6 +3964,10 @@ export default function App() {
 
   if (route.kind === "quick") {
     return renderQuickPage();
+  }
+
+  if (route.kind === "scenario" && !isScenarioUnlocked) {
+    return renderScenarioAccessPage();
   }
 
   return (
@@ -4124,6 +4300,24 @@ export default function App() {
                 <span className="badge">
                   {currentScenario ? (currentScenario.mode === "plan" ? "Planobjektläge" : "Snabbt scenario") : "Scenario låst"}
                 </span>
+                <div className="segmented-control segmented-control-compact" role="tablist" aria-label="Scenarioeditorläge">
+                  <button
+                    type="button"
+                    className={`pill-button ${scenarioEditorMode === "single" ? "pill-button-active" : ""}`}
+                    onClick={() => setScenarioEditorMode("single")}
+                    disabled={!currentScenario}
+                  >
+                    En byggnad
+                  </button>
+                  <button
+                    type="button"
+                    className={`pill-button ${scenarioEditorMode === "multi" ? "pill-button-active" : ""}`}
+                    onClick={() => setScenarioEditorMode("multi")}
+                    disabled={!currentScenario}
+                  >
+                    Flera byggnader
+                  </button>
+                </div>
                 <button type="button" className="ghost-button" onClick={handleDuplicateScenario} disabled={!currentScenario}>
                   Duplicera scenario
                 </button>
@@ -4145,14 +4339,43 @@ export default function App() {
                     >
                       Exportera PNG
                     </button>
-                  </>
-                ) : null}
+                    </>
+                  ) : null}
               </div>
-              <ScenarioMatrixEditor
-                scenario={currentScenario}
-                onImportRows={handleMatrixImportRows}
-                disabled={isScenarioSubmitting || !currentScenario}
-              />
+              {scenarioEditorMode === "multi" ? (
+                <>
+                  <p className="microcopy">
+                    Tabellen används när scenariot ska innehålla flera byggnader eller flera alternativa
+                    kolumner. Varje rad blir då ett planobjekt i scenariot.
+                  </p>
+                  <ScenarioMatrixEditor
+                    scenario={currentScenario}
+                    onImportRows={handleMatrixImportRows}
+                    disabled={isScenarioSubmitting || !currentScenario}
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="microcopy">
+                    Enkel byggnadsvy. Här redigerar du ett koncept i taget utan tabellinmatningens extra
+                    kolumner.
+                  </p>
+                  {currentScenario ? (
+                    renderCalculationForm(
+                      scenarioForm,
+                      updateScenarioForm,
+                      handleScenarioCalculate,
+                      isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
+                      isScenarioSubmitting
+                    )
+                  ) : (
+                    <div className="empty-state-workbench">
+                      <strong>Välj eller skapa ett scenario för att låsa upp kalkylformuläret.</strong>
+                      <span>Byggnadsdata, import och 3D-vy finns redan här men blir redigerbara först när ett scenario är aktivt.</span>
+                    </div>
+                  )}
+                </>
+              )}
               <Building3DViewer
                 id="building3d-panel"
                 scenario={currentScenario}
@@ -4162,20 +4385,6 @@ export default function App() {
                 }
                 onScenarioRefresh={() => refreshWorkspace(currentProject?.organizationId ?? selectedOrganizationId)}
               />
-              {currentScenario ? (
-                renderCalculationForm(
-                  scenarioForm,
-                  updateScenarioForm,
-                  handleScenarioCalculate,
-                  isScenarioSubmitting ? "Beräknar scenario..." : "Beräkna scenario",
-                  isScenarioSubmitting
-                )
-              ) : (
-                <div className="empty-state-workbench">
-                  <strong>Välj eller skapa ett scenario för att låsa upp kalkylformuläret.</strong>
-                  <span>Byggnadsdata, import och 3D-vy finns redan här men blir redigerbara först när ett scenario är aktivt.</span>
-                </div>
-              )}
             </section>
 
             {currentScenario?.planObjects.length ? (
