@@ -526,10 +526,11 @@ describe("App", () => {
       }
 
       if (url === "/api/projects" && method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
         const project = {
           id: "project-1",
           organizationId: "stockholm-stad",
-          name: "Ny stadsdel 2040",
+          name: String(body.name ?? "Ny stadsdel 2040"),
           scenarios: [],
           createdAt: "2026-03-18T00:00:00.000Z",
           updatedAt: "2026-03-18T00:00:00.000Z"
@@ -539,6 +540,16 @@ describe("App", () => {
           projects: [project]
         };
         return new Response(JSON.stringify(project));
+      }
+
+      if (url === "/api/projects/project-1" && method === "DELETE") {
+        const [deletedProject] =
+          workspacePayload.projects.filter((project) => project.id === "project-1");
+        workspacePayload = {
+          ...workspacePayload,
+          projects: workspacePayload.projects.filter((project) => project.id !== "project-1")
+        };
+        return new Response(JSON.stringify(deletedProject ?? null));
       }
 
       if (url === "/api/projects/project-1/scenarios" && method === "POST") {
@@ -565,6 +576,23 @@ describe("App", () => {
         };
 
         return new Response(JSON.stringify(scenario));
+      }
+
+      if (url === "/api/projects/project-1/scenarios/scenario-1" && method === "DELETE") {
+        const project = workspacePayload.projects[0];
+        const deletedScenario = project?.scenarios.find((scenario) => scenario.id === "scenario-1") ?? null;
+        if (project) {
+          workspacePayload = {
+            ...workspacePayload,
+            projects: [
+              {
+                ...project,
+                scenarios: project.scenarios.filter((scenario) => scenario.id !== "scenario-1")
+              }
+            ]
+          };
+        }
+        return new Response(JSON.stringify(deletedScenario));
       }
 
       if (url === "/api/scenarios/scenario-1/calculate" && method === "POST") {
@@ -846,13 +874,49 @@ describe("App", () => {
     expect(await screen.findByText(/separat analysvy/i)).toBeInTheDocument();
   });
 
+  it("deletes a scenario and project from the workspace", async () => {
+    renderAt("/scenario");
+
+    await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
+    await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Rivningsprojekt");
+    await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/rivningsprojekt/i).length).toBeGreaterThan(0);
+    });
+
+    await userEvent.type(screen.getByPlaceholderText(/tät struktur a/i), "Scenario A");
+    await userEvent.click(screen.getByRole("button", { name: /skapa scenario/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/scenario a/i).length).toBeGreaterThan(0);
+    });
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await userEvent.click(screen.getByRole("button", { name: /ta bort scenario/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/scenario a/i)).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /ta bort projekt/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/rivningsprojekt/i)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/skapa ett projekt för att börja bygga scenarier/i)
+    ).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
   it("lets the user draft and import multiple buildings from the table editor", async () => {
     renderAt("/scenario");
 
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
-    const createdProjectLabel = await screen.findByText(/^ny stadsdel 2040$/i, {
+    const createdProjectLabel = await screen.findByText(/^tabellprojekt$/i, {
       selector: "strong"
     });
     await userEvent.click(createdProjectLabel.closest("button") ?? createdProjectLabel);

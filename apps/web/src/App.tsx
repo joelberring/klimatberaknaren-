@@ -36,7 +36,9 @@ import {
   calculateScenarioApi,
   compareScenariosApi,
   createProjectApi,
+  deleteProjectApi,
   createScenarioApi,
+  deleteScenarioApi,
   duplicateScenarioApi,
   fetchDataSources,
   fetchHealth,
@@ -2648,13 +2650,15 @@ export default function App() {
     setWorkspaceError(null);
 
     try {
-      if (!newProjectName.trim()) {
-        throw new Error("Ange ett projektnamn.");
+      const projectName = newProjectName.trim();
+
+      if (projectName.length < 2) {
+        throw new Error("Ange ett projektnamn med minst 2 tecken.");
       }
 
       const project = await createProjectApi({
         organizationId: workspace?.session?.organizationId ?? selectedOrganizationId,
-        name: newProjectName
+        name: projectName
       });
 
       setNewProjectName("");
@@ -2662,6 +2666,53 @@ export default function App() {
       setSelectedProjectId(project.id);
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Projektet kunde inte skapas.");
+    }
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    setWorkspaceError(null);
+
+    const projectToDelete = projects.find((project) => project.id === projectId);
+    if (!projectToDelete) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Ta bort projektet "${projectToDelete.name}" och alla dess scenarier? Det går inte att ångra.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const wasSelectedProjectDeleted = selectedProjectId === projectId;
+      const previousSelectedProjectId = selectedProjectId;
+      const previousSelectedScenarioId = selectedScenarioId;
+
+      const deletedProject = await deleteProjectApi(projectId);
+      setComparison(null);
+      setActiveExplanation(null);
+      setNewScenarioName("");
+
+      const nextWorkspace = await refreshWorkspace(deletedProject.organizationId);
+      const nextProjects = nextWorkspace.projects.filter(
+        (project) => project.organizationId === deletedProject.organizationId
+      );
+      const preservedProject =
+        !wasSelectedProjectDeleted
+          ? nextProjects.find((project) => project.id === previousSelectedProjectId) ?? null
+          : null;
+      const nextProject = preservedProject ?? nextProjects[0] ?? null;
+      const nextScenario =
+        nextProject?.scenarios.find((scenario) => scenario.id === previousSelectedScenarioId) ??
+        nextProject?.scenarios[0] ??
+        null;
+
+      setSelectedProjectId(nextProject?.id ?? "");
+      setSelectedScenarioId(nextScenario?.id ?? "");
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Projektet kunde inte tas bort.");
     }
   }
 
@@ -2674,8 +2725,10 @@ export default function App() {
         throw new Error("Skapa eller välj ett projekt först.");
       }
 
-      if (!newScenarioName.trim()) {
-        throw new Error("Ange ett scenarionamn.");
+      const scenarioName = newScenarioName.trim();
+
+      if (scenarioName.length < 2) {
+        throw new Error("Ange ett scenarionamn med minst 2 tecken.");
       }
 
       let quickInput: CalculateRequest | undefined;
@@ -2686,7 +2739,7 @@ export default function App() {
       }
 
       const scenario = await createScenarioApi(currentProject.id, {
-        name: newScenarioName,
+        name: scenarioName,
         mode: "quick",
         quickInput
       });
@@ -2698,6 +2751,50 @@ export default function App() {
       setWorkspaceError(
         error instanceof Error ? error.message : "Scenariot kunde inte skapas."
       );
+    }
+  }
+
+  async function handleDeleteScenario(scenarioId: string) {
+    setWorkspaceError(null);
+
+    if (!currentProject) {
+      return;
+    }
+
+    const scenarioToDelete = currentProject.scenarios.find((scenario) => scenario.id === scenarioId);
+    if (!scenarioToDelete) {
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Ta bort scenariot "${scenarioToDelete.name}"? Det går inte att ångra.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const wasSelectedScenarioDeleted = selectedScenarioId === scenarioId;
+      const previousSelectedScenarioId = selectedScenarioId;
+
+      await deleteScenarioApi(currentProject.id, scenarioId);
+      setComparison(null);
+      setActiveExplanation(null);
+
+      const nextWorkspace = await refreshWorkspace(currentProject.organizationId);
+      const nextProject =
+        nextWorkspace.projects.find((project) => project.id === currentProject.id) ?? null;
+      const nextScenario =
+        !wasSelectedScenarioDeleted
+          ? nextProject?.scenarios.find((scenario) => scenario.id === previousSelectedScenarioId) ??
+            nextProject?.scenarios[0] ??
+            null
+          : nextProject?.scenarios[0] ?? null;
+
+      setSelectedScenarioId(nextScenario?.id ?? "");
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Scenariot kunde inte tas bort.");
     }
   }
 
@@ -3790,28 +3887,38 @@ export default function App() {
                   value={newProjectName}
                   onChange={(event) => setNewProjectName(event.target.value)}
                   placeholder="Exempel: Ny stadsdel 2040"
+                  minLength={2}
+                  required
                 />
               </label>
-              <button className="ghost-button" type="submit">
+              <button className="ghost-button" type="submit" disabled={newProjectName.trim().length < 2}>
                 Skapa projekt
               </button>
             </form>
             <div className="project-list">
               {projects.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  className={`list-button ${
-                    currentProject?.id === project.id ? "list-button-active" : ""
-                  }`}
-                  onClick={() => {
-                    setSelectedProjectId(project.id);
-                    setComparison(null);
-                  }}
-                >
-                  <strong>{project.name}</strong>
-                  <span>{project.scenarios.length} scenarier</span>
-                </button>
+                <div key={project.id} className="list-entry-row">
+                  <button
+                    type="button"
+                    className={`list-button ${
+                      currentProject?.id === project.id ? "list-button-active" : ""
+                    }`}
+                    onClick={() => {
+                      setSelectedProjectId(project.id);
+                      setComparison(null);
+                    }}
+                  >
+                    <strong>{project.name}</strong>
+                    <span>{project.scenarios.length} scenarier</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button ghost-button-small danger-button"
+                    onClick={() => handleDeleteProject(project.id)}
+                  >
+                    Ta bort projekt
+                  </button>
+                </div>
               ))}
             </div>
           </section>
@@ -3830,28 +3937,38 @@ export default function App() {
                       value={newScenarioName}
                       onChange={(event) => setNewScenarioName(event.target.value)}
                       placeholder="Exempel: Tät struktur A"
+                      minLength={2}
+                      required
                     />
                   </label>
-                  <button className="ghost-button" type="submit">
+                  <button className="ghost-button" type="submit" disabled={newScenarioName.trim().length < 2}>
                     Skapa scenario
                   </button>
                 </form>
                 <div className="project-list">
                   {currentProject.scenarios.map((scenario) => (
-                    <button
-                      key={scenario.id}
-                      type="button"
-                      className={`list-button ${
-                        currentScenario?.id === scenario.id ? "list-button-active" : ""
-                      }`}
-                      onClick={() => {
-                        setSelectedScenarioId(scenario.id);
-                        setComparison(null);
-                      }}
-                    >
-                      <strong>{scenario.name}</strong>
-                      <span>{scenario.runs?.length ?? 0} körningar</span>
-                    </button>
+                    <div key={scenario.id} className="list-entry-row">
+                      <button
+                        type="button"
+                        className={`list-button ${
+                          currentScenario?.id === scenario.id ? "list-button-active" : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedScenarioId(scenario.id);
+                          setComparison(null);
+                        }}
+                      >
+                        <strong>{scenario.name}</strong>
+                        <span>{scenario.runs?.length ?? 0} körningar</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button ghost-button-small danger-button"
+                        onClick={() => handleDeleteScenario(scenario.id)}
+                      >
+                        Ta bort scenario
+                      </button>
+                    </div>
                   ))}
                 </div>
                 <div className="segmented-control" role="tablist" aria-label="Jämförelsemått">

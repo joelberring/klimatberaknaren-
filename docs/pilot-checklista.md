@@ -3,6 +3,8 @@
 ## Innan publicering
 
 - Säkerställ att `DATABASE_URL` eller `POSTGRES_URL` är satt i Vercel-projektet.
+- Rekommendation: använd en Vercel Marketplace-integration för Neon eller Supabase så att credentials injiceras automatiskt.
+- För Supabase, välj pooler transaction mode för serverless-anrop.
 - Sätt `ALLOWED_ORIGIN` till pilotdomänen.
 - Aktivera Vercel Deployment Protection eller motsvarande lösenordsskydd för piloten.
 - Bekräfta kontaktperson, versionsdatum och pilotmål.

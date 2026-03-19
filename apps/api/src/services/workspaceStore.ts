@@ -260,6 +260,19 @@ export async function createProject(payload: CreateProjectRequest) {
   return project;
 }
 
+export async function deleteProject(projectId: string) {
+  const projects = await loadNormalizedProjects();
+  const index = projects.findIndex((entry) => entry.id === projectId);
+
+  if (index === -1) {
+    throw new Error("Projektet hittades inte");
+  }
+
+  const [removedProject] = projects.splice(index, 1);
+  await saveProjects(projects);
+  return removedProject;
+}
+
 export async function listProjects(organizationId?: string) {
   const projects = await loadNormalizedProjects();
   return organizationId
@@ -303,6 +316,26 @@ export async function createScenario(projectId: string, payload: CreateScenarioR
   project.updatedAt = timestamp;
   await saveProjects(projects);
   return scenario;
+}
+
+export async function deleteScenario(projectId: string, scenarioId: string) {
+  const projects = await loadNormalizedProjects();
+  const project = projects.find((entry) => entry.id === projectId);
+
+  if (!project) {
+    throw new Error("Projektet hittades inte");
+  }
+
+  const index = project.scenarios.findIndex((scenario) => scenario.id === scenarioId);
+
+  if (index === -1) {
+    throw new Error("Scenariot hittades inte");
+  }
+
+  const [removedScenario] = project.scenarios.splice(index, 1);
+  project.updatedAt = new Date().toISOString();
+  await saveProjects(projects);
+  return removedScenario;
 }
 
 export async function duplicateScenario(projectId: string, scenarioId: string, name?: string) {

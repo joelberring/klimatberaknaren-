@@ -26,6 +26,15 @@ Appen är förberedd för Vercel med:
 - samma relativa `/api/...`-anrop i frontend
 - stöd för uthållig lagring via `DATABASE_URL` eller `POSTGRES_URL`
 
+### Enklaste sättet att få uthållig lagring
+
+1. Öppna ditt projekt i Vercel.
+2. Lägg till en storage-integration från Marketplace, till exempel Neon eller Supabase.
+3. Låt Vercel injicera databaskopplingen som miljövariabel, eller klistra in den själv som `DATABASE_URL`.
+4. Deploya om så att den nya miljövariabeln gäller för nästa deployment.
+
+För Supabase bör du använda **pooler transaction mode** för serverless-funktioner. För Vercel gäller att nya miljövariabler bara används i nya deploymentar.
+
 ### Rekommenderade miljövariabler
 
 ```bash

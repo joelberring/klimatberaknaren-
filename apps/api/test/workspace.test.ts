@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   handleBenchmarkProfilesRequest,
   handleProjectCreateRequest,
+  handleProjectDeleteRequest,
   handleScenarioCalculateRequest,
   handleScenarioCompareRequest,
   handleScenarioCreateRequest,
+  handleScenarioDeleteRequest,
   handleScenarioModel3DImportRequest,
   handleScenarioGeoJsonImportRequest,
   handleSessionLogin,
@@ -397,5 +399,87 @@ describe("workspace flows", () => {
 
     expect((workspaceResponse.body as { organizations: unknown[] }).organizations.length).toBe(2);
     expect((benchmarkResponse.body as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it("deletes scenarios and projects from the persisted workspace", async () => {
+    const projectResponse = createMockResponse();
+    await handleProjectCreateRequest(
+      {
+        body: {
+          organizationId: "stockholm-stad",
+          name: "Tillfälligt projekt"
+        }
+      } as Request,
+      projectResponse
+    );
+
+    const projectId = (projectResponse.body as { id: string }).id;
+
+    const scenarioResponse = createMockResponse();
+    await handleScenarioCreateRequest(
+      {
+        params: { projectId },
+        body: {
+          name: "Tillfälligt scenario",
+          mode: "quick"
+        }
+      } as unknown as Request,
+      scenarioResponse
+    );
+
+    const deleteScenarioResponse = createMockResponse();
+    await handleScenarioDeleteRequest(
+      {
+        params: {
+          projectId,
+          scenarioId: (scenarioResponse.body as { id: string }).id
+        }
+      } as unknown as Request,
+      deleteScenarioResponse
+    );
+
+    const afterScenarioDelete = createMockResponse();
+    await handleWorkspaceRequest(
+      {
+        query: {
+          organizationId: "stockholm-stad"
+        }
+      } as unknown as Request,
+      afterScenarioDelete
+    );
+
+    const deleteProjectResponse = createMockResponse();
+    await handleProjectDeleteRequest(
+      {
+        params: {
+          projectId
+        }
+      } as unknown as Request,
+      deleteProjectResponse
+    );
+
+    const afterProjectDelete = createMockResponse();
+    await handleWorkspaceRequest(
+      {
+        query: {
+          organizationId: "stockholm-stad"
+        }
+      } as unknown as Request,
+      afterProjectDelete
+    );
+
+    expect(deleteScenarioResponse.statusCode).toBe(200);
+    expect((deleteScenarioResponse.body as { id: string }).id).toBe(
+      (scenarioResponse.body as { id: string }).id
+    );
+    expect(
+      (
+        afterScenarioDelete.body as {
+          projects: Array<{ id: string; scenarios: Array<unknown> }>;
+        }
+      ).projects[0].scenarios
+    ).toHaveLength(0);
+    expect(deleteProjectResponse.statusCode).toBe(200);
+    expect((afterProjectDelete.body as { projects: unknown[] }).projects).toHaveLength(0);
   });
 });

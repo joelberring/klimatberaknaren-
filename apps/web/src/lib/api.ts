@@ -81,10 +81,30 @@ export async function createProjectApi(payload: CreateProjectRequest) {
   return parseJson<Project>(await jsonRequest("/api/projects", payload), "POST /api/projects");
 }
 
+export async function deleteProjectApi(projectId: string) {
+  return parseJson<Project>(
+    await fetch(`/api/projects/${projectId}`, {
+      method: "DELETE",
+      credentials: "same-origin"
+    }),
+    `DELETE /api/projects/${projectId}`
+  );
+}
+
 export async function createScenarioApi(projectId: string, payload: CreateScenarioRequest) {
   return parseJson<Project["scenarios"][number]>(
     await jsonRequest(`/api/projects/${projectId}/scenarios`, payload),
     `POST /api/projects/${projectId}/scenarios`
+  );
+}
+
+export async function deleteScenarioApi(projectId: string, scenarioId: string) {
+  return parseJson<Project["scenarios"][number]>(
+    await fetch(`/api/projects/${projectId}/scenarios/${scenarioId}`, {
+      method: "DELETE",
+      credentials: "same-origin"
+    }),
+    `DELETE /api/projects/${projectId}/scenarios/${scenarioId}`
   );
 }
 

@@ -24,7 +24,9 @@ import { calculateScenarioResult, compareScenarios } from "./services/scenarioEn
 import {
   appendScenarioPlanObjects,
   createProject,
+  deleteProject,
   createScenario,
+  deleteScenario,
   createSession,
   duplicateScenario,
   getBenchmarkProfile,
@@ -149,6 +151,14 @@ export async function handleProjectCreateRequest(
   response.status(201).json(await createProject(payload));
 }
 
+export async function handleProjectDeleteRequest(
+  request: express.Request,
+  response: express.Response
+) {
+  const project = await deleteProject(getStringParam(request.params.projectId));
+  response.json(project);
+}
+
 export async function handleProjectDetailRequest(
   request: express.Request,
   response: express.Response
@@ -170,6 +180,17 @@ export async function handleScenarioCreateRequest(
   response
     .status(201)
     .json(await createScenario(getStringParam(request.params.projectId), payload));
+}
+
+export async function handleScenarioDeleteRequest(
+  request: express.Request,
+  response: express.Response
+) {
+  const removedScenario = await deleteScenario(
+    getStringParam(request.params.projectId),
+    getStringParam(request.params.scenarioId)
+  );
+  response.json(removedScenario);
 }
 
 export async function handleScenarioDuplicateRequest(
@@ -385,8 +406,13 @@ export function createApp() {
   app.post("/api/calculate", routeGuard(handleCalculateRequest));
   app.get("/api/projects", routeGuard(handleProjectsListRequest));
   app.post("/api/projects", routeGuard(handleProjectCreateRequest));
+  app.delete("/api/projects/:projectId", routeGuard(handleProjectDeleteRequest));
   app.get("/api/projects/:projectId", routeGuard(handleProjectDetailRequest));
   app.post("/api/projects/:projectId/scenarios", routeGuard(handleScenarioCreateRequest));
+  app.delete(
+    "/api/projects/:projectId/scenarios/:scenarioId",
+    routeGuard(handleScenarioDeleteRequest)
+  );
   app.post(
     "/api/projects/:projectId/scenarios/:scenarioId/duplicate",
     routeGuard(handleScenarioDuplicateRequest)
