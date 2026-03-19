@@ -1,4 +1,10 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 
 import { formatNumber } from "../../../../packages/shared/src";
 import {
@@ -87,10 +93,7 @@ export function FootprintShapeEditor({
     recalcSelection(nextPoints);
   };
 
-  const updateDraftFromPointer = (
-    pointerEvent: PointerEvent,
-    sourceViewBox = viewBox
-  ) => {
+  const updateDraftFromPointer = (pointerEvent: PointerEvent, sourceViewBox = viewBox) => {
     const svg = svgRef.current;
     if (!svg) {
       return null;
@@ -107,12 +110,12 @@ export function FootprintShapeEditor({
     };
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const handlePointerMove = (pointerEvent: PointerEvent) => {
     if (!dragState) {
       return;
     }
 
-    const point = updateDraftFromPointer(event.nativeEvent, dragState.viewBox);
+    const point = updateDraftFromPointer(pointerEvent, dragState.viewBox);
     if (!point) {
       return;
     }
@@ -139,17 +142,37 @@ export function FootprintShapeEditor({
     }
   };
 
-  const handlePointerUp = () => {
-    setDragState(null);
-  };
+  useEffect(() => {
+    if (!dragState) {
+      return;
+    }
 
-  const handleCornerPointerDown = (index: number, event: ReactPointerEvent<SVGCircleElement>) => {
+    const handleWindowPointerMove = (event: PointerEvent) => {
+      handlePointerMove(event);
+    };
+
+    const handleWindowPointerUp = () => {
+      setDragState(null);
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerUp);
+    };
+  }, [dragState]);
+
+  const handleCornerPointerDown = (index: number, event: ReactPointerEvent<SVGElement>) => {
     if (disabled) {
       return;
     }
 
     event.stopPropagation();
-    svgRef.current?.setPointerCapture(event.pointerId);
+    event.preventDefault();
     const point = updateDraftFromPointer(event.nativeEvent);
     if (!point) {
       return;
@@ -166,12 +189,12 @@ export function FootprintShapeEditor({
     });
   };
 
-  const handleShapePointerDown = (event: ReactPointerEvent<SVGPolygonElement>) => {
+  const handleShapePointerDown = (event: ReactPointerEvent<SVGElement>) => {
     if (disabled) {
       return;
     }
 
-    svgRef.current?.setPointerCapture(event.pointerId);
+    event.preventDefault();
     const point = updateDraftFromPointer(event.nativeEvent);
     if (!point) {
       return;
@@ -243,6 +266,16 @@ export function FootprintShapeEditor({
     onChange(createDefaultFootprintDraft());
     setSelectedPointIndex(null);
     setDragState(null);
+  };
+
+  const adjustRectangleSize = (widthDelta: number, depthDelta: number) => {
+    if (disabled || value.mode !== "rectangle") {
+      return;
+    }
+
+    onChange(
+      setDraftSize(value, value.widthMeters + widthDelta, value.depthMeters + depthDelta)
+    );
   };
 
   return (
@@ -331,6 +364,24 @@ export function FootprintShapeEditor({
         </div>
       </div>
 
+      {value.mode === "rectangle" ? (
+        <div className="footprint-stepper-row" aria-label="Snabbjustering av rektangelform">
+          <span>Snabbjustera:</span>
+          <button type="button" className="ghost-button ghost-button-small" onClick={() => adjustRectangleSize(-1, 0)} disabled={disabled}>
+            Bredd −1 m
+          </button>
+          <button type="button" className="ghost-button ghost-button-small" onClick={() => adjustRectangleSize(1, 0)} disabled={disabled}>
+            Bredd +1 m
+          </button>
+          <button type="button" className="ghost-button ghost-button-small" onClick={() => adjustRectangleSize(0, -1)} disabled={disabled}>
+            Djup −1 m
+          </button>
+          <button type="button" className="ghost-button ghost-button-small" onClick={() => adjustRectangleSize(0, 1)} disabled={disabled}>
+            Djup +1 m
+          </button>
+        </div>
+      ) : null}
+
       {value.mode === "polygon" ? (
         <p className="microcopy">
           Polygonläge: bredd {formatNumber(value.widthMeters, 1)} m, djup {formatNumber(value.depthMeters, 1)} m.
@@ -346,9 +397,6 @@ export function FootprintShapeEditor({
           viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
           role="img"
           aria-label="Redigerbar footprint"
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
         >
           <defs>
             <pattern id="footprint-grid" width="4" height="4" patternUnits="userSpaceOnUse">
@@ -362,22 +410,42 @@ export function FootprintShapeEditor({
             height={viewBox.height}
             fill="url(#footprint-grid)"
           />
+          {value.mode === "rectangle" ? (
+            <rect
+              x={bounds.minX}
+              y={bounds.minY}
+              width={bounds.width}
+              height={bounds.height}
+              className="footprint-hit-area"
+              onPointerDown={handleShapePointerDown}
+            />
+          ) : null}
           <polygon
             points={pointString(value.points)}
             className="footprint-shape"
             onPointerDown={handleShapePointerDown}
           />
           {value.points.map((point, index) => (
-            <circle
-              key={`${index}-${point.x}-${point.y}`}
-              cx={point.x}
-              cy={point.y}
-              r="0.45"
-              className={`footprint-handle ${
-                selectedPointIndex === index ? "footprint-handle-active" : ""
-              }`}
-              onPointerDown={(event) => handleCornerPointerDown(index, event)}
-            />
+            <g key={`${index}-${point.x}-${point.y}`}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="1.1"
+                className={`footprint-handle-hit ${
+                  selectedPointIndex === index ? "footprint-handle-hit-active" : ""
+                }`}
+                onPointerDown={(event) => handleCornerPointerDown(index, event)}
+              />
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="0.45"
+                className={`footprint-handle ${
+                  selectedPointIndex === index ? "footprint-handle-active" : ""
+                }`}
+                onPointerDown={(event) => handleCornerPointerDown(index, event)}
+              />
+            </g>
           ))}
         </svg>
       </div>

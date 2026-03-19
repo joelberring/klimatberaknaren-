@@ -1314,11 +1314,29 @@ select {
   touch-action: none;
 }
 
+.footprint-hit-area {
+  fill: rgba(255, 255, 255, 0.001);
+  stroke: transparent;
+  pointer-events: all;
+  cursor: move;
+}
+
 .footprint-shape {
   fill: rgba(143, 138, 132, 0.2);
   stroke: var(--line);
   stroke-width: 0.6;
   cursor: move;
+}
+
+.footprint-handle-hit {
+  fill: rgba(255, 255, 255, 0.001);
+  stroke: transparent;
+  pointer-events: all;
+  cursor: grab;
+}
+
+.footprint-handle-hit-active {
+  fill: rgba(17, 17, 17, 0.08);
 }
 
 .footprint-handle {
@@ -1330,6 +1348,20 @@ select {
 
 .footprint-handle-active {
   fill: var(--ink);
+}
+
+.footprint-stepper-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.footprint-stepper-row .ghost-button-small {
+  padding: 0.45rem 0.7rem;
+  min-width: 0;
 }
 
 .map-legend {
