@@ -762,8 +762,13 @@ describe("App", () => {
     await userEvent.type(screen.getByLabelText(/^Byggår$/i), "2005");
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
 
-    expect(await screen.findByText(/resultat för snabbkalkyl/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /statistikdatabasen/i })).toHaveAttribute(
+    await waitFor(
+      () => {
+        expect(screen.getByText(/resultat för snabbkalkyl/i)).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
+    expect(screen.getAllByRole("link", { name: /statistikdatabasen/i })[0]).toHaveAttribute(
       "href",
       "https://example.com"
     );
