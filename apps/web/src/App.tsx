@@ -2600,6 +2600,13 @@ export default function App() {
       disabled: !currentScenario
     }
   ];
+  const primaryWorkflowIds = ["workspace", "decision", "three-d", "results"] as const;
+  const primaryWorkflowCards = workflowRegistry.filter((card) =>
+    primaryWorkflowIds.includes(card.id as (typeof primaryWorkflowIds)[number])
+  );
+  const secondaryWorkflowCards = workflowRegistry.filter(
+    (card) => !primaryWorkflowIds.includes(card.id as (typeof primaryWorkflowIds)[number])
+  );
 
   useEffect(() => {
     if (workspace?.benchmarkProfiles?.length) {
@@ -3605,11 +3612,11 @@ export default function App() {
 
       <section className="panel feature-coverage-panel">
         <div className="section-heading">
-          <p className="eyebrow">Funktionstäckning</p>
-          <h2>Alla byggda lager synliga i samma workbench</h2>
+          <p className="eyebrow">Så arbetar du</p>
+          <h2>Följ flödet i rätt ordning</h2>
           <p className="lede">
-            Snabb väg till arbetsyta, beslut, analys, 3D/form, resultat och jämförelser. Statusfältet visar vad som är
-            laddat, vad som finns i UI och vad som går att verifiera i preview.
+            Börja i arbetsytan, gå vidare till beslutsstöd, justera form i 3D-vyn och använd resultatet
+            för att förklara vad som driver utfallet. Övriga verktyg ligger kvar under "Fler verktyg" när du behöver dem.
           </p>
         </div>
         <div className="feature-status-row">
@@ -3618,34 +3625,64 @@ export default function App() {
           <span>Workspace: {workspace ? "Laddad" : "Väntar"}</span>
           <span>Scenario: {currentScenario ? "Aktivt" : "Saknas"}</span>
         </div>
-        <div className="feature-coverage-grid" aria-label="Funktionstäckning">
-          {workflowRegistry
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map((card) => (
-            <article key={card.id} className="feature-coverage-card">
-              <div className="feature-coverage-card-head">
-                <div>
-                  <p className="eyebrow">{card.codeState}</p>
-                  <h3>{card.title}</h3>
+        <div className="workflow-guide" aria-label="Rekommenderad ordning">
+          {primaryWorkflowCards.map((card, index) => (
+            <article key={card.id} className="workflow-step">
+              <div className="workflow-step-index">{String(index + 1).padStart(2, "0")}</div>
+              <div className="workflow-step-body">
+                <div className="feature-coverage-card-head">
+                  <div>
+                    <p className="eyebrow">{card.codeState}</p>
+                    <h3>{card.title}</h3>
+                  </div>
+                  <span className="feature-coverage-chip">{card.uiState}</span>
                 </div>
-                <span className="feature-coverage-chip">{card.uiState}</span>
+                <p className="microcopy">{card.summary}</p>
+                <div className="workflow-step-meta">
+                  <span>{card.deployState}</span>
+                  <span>{index === 0 ? "Start här" : index === 1 ? "När du har ett scenario" : "Nästa steg"}</span>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button workflow-step-button"
+                  onClick={card.onAction}
+                  disabled={card.disabled}
+                >
+                  {card.actionLabel}
+                </button>
               </div>
-              <p className="microcopy">{card.summary}</p>
-              <div className="feature-coverage-meta">
-                <span>{card.deployState}</span>
-              </div>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={card.onAction}
-                disabled={card.disabled}
-              >
-                {card.actionLabel}
-              </button>
             </article>
           ))}
         </div>
+
+        <details className="workflow-secondary">
+          <summary>Fler verktyg</summary>
+          <div className="workflow-secondary-grid" aria-label="Fler verktyg">
+            {secondaryWorkflowCards.map((card) => (
+              <article key={card.id} className="feature-coverage-card feature-coverage-card-compact">
+                <div className="feature-coverage-card-head">
+                  <div>
+                    <p className="eyebrow">{card.codeState}</p>
+                    <h3>{card.title}</h3>
+                  </div>
+                  <span className="feature-coverage-chip">{card.uiState}</span>
+                </div>
+                <p className="microcopy">{card.summary}</p>
+                <div className="feature-coverage-meta">
+                  <span>{card.deployState}</span>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={card.onAction}
+                  disabled={card.disabled}
+                >
+                  {card.actionLabel}
+                </button>
+              </article>
+            ))}
+          </div>
+        </details>
       </section>
 
       <section className="panel workspace-panel" id="workspace-panel">

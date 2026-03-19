@@ -757,7 +757,7 @@ describe("App", () => {
   it("runs the quick calculator and renders totals plus source metadata", async () => {
     render(<App />);
 
-    expect(await screen.findByText(/funktionstäckning/i)).toBeInTheDocument();
+    expect(await screen.findByText(/så arbetar du/i)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^Bruttoarea$/i), "1000");
     await userEvent.type(screen.getByLabelText(/^Byggår$/i), "2005");
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
@@ -772,7 +772,7 @@ describe("App", () => {
   it("shows locked scenario workbench states before a scenario exists", async () => {
     render(<App />);
 
-    expect(await screen.findByText(/funktionstäckning/i)).toBeInTheDocument();
+    expect(await screen.findByText(/så arbetar du/i)).toBeInTheDocument();
     expect(screen.getByText(/välj scenario för att redigera/i)).toBeInTheDocument();
     expect(screen.getByText(/scenario låst/i)).toBeInTheDocument();
     expect(
