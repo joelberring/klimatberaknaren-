@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { draftFromModel, insertCorner, buildPreviewModelFromDraft, createDefaultFootprintDraft, getFootprintMetrics } from "./footprintShape";
+import {
+  buildPreviewModelFromDraft,
+  createDefaultFootprintDraft,
+  draftFromModel,
+  getFootprintMetrics,
+  insertCorner,
+  setDraftSize
+} from "./footprintShape";
 
 describe("footprintShape helpers", () => {
   it("creates a default rectangle with sensible metrics", () => {
@@ -33,6 +40,17 @@ describe("footprintShape helpers", () => {
     expect(model.heightMeters).toBe(draft.heightMeters);
     expect(model.footprint?.type).toBe("Polygon");
     expect(model.parts).toHaveLength(1);
+  });
+
+  it("updates the rectangle footprint when resizing the draft", () => {
+    const draft = createDefaultFootprintDraft();
+    const resized = setDraftSize(draft, 36, 20);
+
+    expect(resized.widthMeters).toBe(36);
+    expect(resized.depthMeters).toBe(20);
+    expect(getFootprintMetrics(resized.points, resized.heightMeters).areaM2).toBeGreaterThan(
+      getFootprintMetrics(draft.points, draft.heightMeters).areaM2
+    );
   });
 
   it("normalizes a polygon model into an editable draft", () => {
