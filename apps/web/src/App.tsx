@@ -42,10 +42,12 @@ import {
   duplicateScenarioApi,
   fetchDataSources,
   fetchHealth,
+  fetchScenarioAccessStatus,
   fetchWorkspace,
   importGeoJsonApi,
   importTabularApi,
   loginSession,
+  unlockScenarioAccess,
   type ApiHealthResponse
 } from "./lib/api";
 import { BenchmarkPositionChart } from "./components/BenchmarkPositionChart";
@@ -107,8 +109,6 @@ const STOCKHOLM_LOCATION_PRESET = {
   lat: "59.3293",
   lon: "18.0686"
 } as const;
-const SCENARIO_ACCESS_STORAGE_KEY = "climate-calculator.scenario-access";
-const SCENARIO_ACCESS_CODE = "stockholm";
 
 const initialForm: FormState = {
   buildingType: "flerbostadshus",
@@ -202,10 +202,6 @@ function toNumber(value: string) {
   }
 
   return Number(value.replace(",", "."));
-}
-
-function normalizeScenarioAccessCode(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function payloadToForm(payload?: CalculateRequest): FormState {
@@ -2476,13 +2472,8 @@ export default function App() {
   const [scenarioEditorMode, setScenarioEditorMode] = useState<"single" | "multi">("single");
   const [scenarioAccessCode, setScenarioAccessCode] = useState("");
   const [scenarioAccessError, setScenarioAccessError] = useState<string | null>(null);
-  const [isScenarioUnlocked, setIsScenarioUnlocked] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem(SCENARIO_ACCESS_STORAGE_KEY) === "unlocked";
-    } catch {
-      return false;
-    }
-  });
+  const [isScenarioUnlocked, setIsScenarioUnlocked] = useState(false);
+  const [isScenarioAccessLoading, setIsScenarioAccessLoading] = useState(true);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -2497,6 +2488,11 @@ export default function App() {
     fetchHealth()
       .then((health) => setApiHealth(health))
       .catch(() => setApiHealth(null));
+
+    fetchScenarioAccessStatus()
+      .then((status) => setIsScenarioUnlocked(status.unlocked))
+      .catch(() => setIsScenarioUnlocked(false))
+      .finally(() => setIsScenarioAccessLoading(false));
 
     Promise.all([fetchDataSources(), fetchWorkspace()])
       .then(([sources, workspaceResponse]) => {
@@ -2571,42 +2567,25 @@ export default function App() {
     }
   }, [workspace?.benchmarkProfiles]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        SCENARIO_ACCESS_STORAGE_KEY,
-        isScenarioUnlocked ? "unlocked" : "locked"
-      );
-    } catch {
-      // ignore storage issues in restricted environments
-    }
-  }, [isScenarioUnlocked]);
-
-  function unlockScenarioAccess(code: string) {
-    if (normalizeScenarioAccessCode(code) === SCENARIO_ACCESS_CODE) {
-      setIsScenarioUnlocked(true);
-      setScenarioAccessError(null);
-      setScenarioAccessCode("");
-      return true;
-    }
-
-    setScenarioAccessError("Fel lösenord. Prova Stockholm.");
-    return false;
-  }
-
   function handleScenarioAccessSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!isScenarioUnlocked && !unlockScenarioAccess(scenarioAccessCode)) {
-      return;
-    }
-
-    setScenarioAccessError(null);
-    setScenarioAccessCode("");
-
-    if (route.kind !== "scenario") {
-      navigateTo(buildScenarioPath());
-    }
+    unlockScenarioAccess({ code: scenarioAccessCode })
+      .then(() => {
+        setIsScenarioUnlocked(true);
+        setScenarioAccessError(null);
+        setScenarioAccessCode("");
+        if (route.kind !== "scenario") {
+          navigateTo(buildScenarioPath());
+        }
+      })
+      .catch((error) => {
+        setIsScenarioUnlocked(false);
+        setScenarioAccessError(error instanceof Error ? error.message : "Ogiltig kod");
+      })
+      .finally(() => {
+        setIsScenarioAccessLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -3654,10 +3633,23 @@ export default function App() {
   }
 
   function renderScenarioAccessForm() {
+    if (isScenarioUnlocked) {
+      return (
+        <div className="scenario-access-form">
+          <p className="scenario-access-status" aria-live="polite">
+            Scenario är upplåst i den här webbläsaren.
+          </p>
+          <button type="button" className="submit-button" onClick={() => navigateTo(buildScenarioPath())}>
+            Öppna scenario / projekt
+          </button>
+        </div>
+      );
+    }
+
     return (
       <form className="scenario-access-form" onSubmit={handleScenarioAccessSubmit}>
         <label>
-          Scenario-lösenord
+          Scenario-kod
           <input
             type="password"
             value={scenarioAccessCode}
@@ -3667,7 +3659,7 @@ export default function App() {
                 setScenarioAccessError(null);
               }
             }}
-            placeholder="Stockholm"
+            placeholder="Ange kod"
             autoComplete="off"
           />
         </label>
@@ -3678,13 +3670,9 @@ export default function App() {
           <p className="form-error" role="alert">
             {scenarioAccessError}
           </p>
-        ) : isScenarioUnlocked ? (
-          <p className="scenario-access-status" aria-live="polite">
-            Scenario är upplåst i den här webbläsaren.
-          </p>
         ) : null}
-        <button type="submit" className="submit-button">
-          Öppna scenario / projekt
+        <button type="submit" className="submit-button" disabled={isScenarioAccessLoading}>
+          Lås upp scenario
         </button>
       </form>
     );
@@ -3747,7 +3735,7 @@ export default function App() {
                   <h3>Alternativ och analys</h3>
                 </div>
                 <span className="feature-coverage-chip">
-                  {isScenarioUnlocked ? "Upplåst" : "Kod krävs"}
+                  {isScenarioUnlocked ? "Upplåst" : "Låst"}
                 </span>
               </div>
               <p className="microcopy">
@@ -3788,7 +3776,7 @@ export default function App() {
             <h1>Scenario är låst</h1>
             <p className="lede">
               Ange koden för att öppna projekt, historik, import, analys och jämförelse. Snabbkalkyl
-              fortsätter att fungera utan lösenord.
+              fortsätter att fungera utan åtkomstkod.
             </p>
           </div>
           <div className="intro-actions">
@@ -3811,7 +3799,7 @@ export default function App() {
             <p className="eyebrow">Låst läge</p>
             <h2>Öppna scenario / projekt</h2>
             <p className="lede">
-              Ange lösenordet för att fortsätta till scenarioläget. Vi låser bara scenarioflödet,
+              Ange åtkomstkoden för att fortsätta till scenarioläget. Vi låser bara scenarioflödet,
               inte snabbkalkylen.
             </p>
           </div>

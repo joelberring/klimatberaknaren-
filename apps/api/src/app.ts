@@ -14,6 +14,7 @@ import {
   model3dImportSchema,
   scenarioCalculationSchema,
   scenarioSchema,
+  scenarioAccessSchema,
   sessionSchema,
   tabularImportSchema
 } from "./schemas/workspaceSchemas";
@@ -43,6 +44,8 @@ import {
 } from "./services/workspaceStore";
 
 const PILOT_SESSION_COOKIE = "pilot_session_id";
+const SCENARIO_ACCESS_COOKIE = "pilot_scenario_access";
+const DEFAULT_SCENARIO_ACCESS_CODE = "Stockholm";
 
 function routeGuard(handler: express.Handler): express.Handler {
   return (request, response, next) => {
@@ -104,6 +107,23 @@ function ensurePilotSessionId(request: express.Request, response: express.Respon
   return sessionId;
 }
 
+function getScenarioAccessCode() {
+  return process.env.SCENARIO_ACCESS_CODE?.trim() || DEFAULT_SCENARIO_ACCESS_CODE;
+}
+
+function hasScenarioAccess(request: express.Request) {
+  return Boolean(getCookieValue(request, SCENARIO_ACCESS_COOKIE));
+}
+
+function setScenarioAccessCookie(response: express.Response) {
+  response.setHeader(
+    "Set-Cookie",
+    `${SCENARIO_ACCESS_COOKIE}=1; Path=/; HttpOnly; SameSite=Lax${
+      process.env.NODE_ENV === "production" ? "; Secure" : ""
+    }; Max-Age=${60 * 60 * 24 * 30}`
+  );
+}
+
 function logWorkspaceMutation(
   action: string,
   details: Record<string, string | number | boolean | null | undefined>
@@ -143,6 +163,31 @@ export async function handleSessionLogin(request: express.Request, response: exp
 
 export function handleDataSourcesRequest(_request: express.Request, response: express.Response) {
   response.json(getDataSourcesResponse());
+}
+
+export function handleScenarioAccessStatusRequest(
+  request: express.Request,
+  response: express.Response
+) {
+  response.json({
+    unlocked: hasScenarioAccess(request)
+  });
+}
+
+export async function handleScenarioAccessRequest(
+  request: express.Request,
+  response: express.Response
+) {
+  const payload = scenarioAccessSchema.parse(request.body);
+  if (payload.code.trim().toLowerCase() !== getScenarioAccessCode().trim().toLowerCase()) {
+    return response.status(403).json({
+      message: "Ogiltig kod",
+      kind: "access_denied"
+    });
+  }
+
+  setScenarioAccessCookie(response);
+  response.status(204).send();
 }
 
 export async function handleCalculateRequest(request: express.Request, response: express.Response) {
@@ -481,6 +526,8 @@ export function createApp() {
   });
 
   app.get("/api/health", handleHealthRequest);
+  app.get("/api/scenario-access/status", handleScenarioAccessStatusRequest);
+  app.post("/api/scenario-access", routeGuard(handleScenarioAccessRequest));
   app.get("/api/workspace", routeGuard(handleWorkspaceRequest));
   app.post("/api/session/login", routeGuard(handleSessionLogin));
   app.get("/api/data-sources", routeGuard(handleDataSourcesRequest));

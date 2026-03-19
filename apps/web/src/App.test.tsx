@@ -6,7 +6,7 @@ import App from "./App";
 
 const fetchMock = vi.fn();
 let workspacePayload: TestWorkspacePayload;
-const SCENARIO_ACCESS_STORAGE_KEY = "climate-calculator.scenario-access";
+let scenarioAccessUnlocked = true;
 
 interface TestSession {
   email: string;
@@ -350,7 +350,7 @@ function renderAt(pathname: string) {
 
 describe("App", () => {
   beforeEach(() => {
-    window.localStorage.setItem(SCENARIO_ACCESS_STORAGE_KEY, "unlocked");
+    scenarioAccessUnlocked = true;
     workspacePayload = {
       session: null,
       organizations: [
@@ -507,6 +507,36 @@ describe("App", () => {
             }
           })
         );
+      }
+
+      if (url === "/api/scenario-access/status") {
+        return new Response(
+          JSON.stringify({
+            unlocked: scenarioAccessUnlocked
+          })
+        );
+      }
+
+      if (url === "/api/scenario-access" && method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const code = String(body.code ?? "").trim().toLowerCase();
+
+        if (code !== "stockholm") {
+          return new Response(
+            JSON.stringify({
+              message: "Ogiltig kod",
+              kind: "access_denied"
+            }),
+            {
+              status: 403
+            }
+          );
+        }
+
+        scenarioAccessUnlocked = true;
+        return new Response(null, {
+          status: 204
+        });
       }
 
       if (url === "/api/calculate" && method === "POST") {
@@ -779,7 +809,6 @@ describe("App", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
-    window.localStorage.clear();
     window.history.pushState({}, "", "/");
   });
 
@@ -828,34 +857,35 @@ describe("App", () => {
   });
 
   it("shows locked scenario workbench states before a scenario exists", async () => {
-    window.localStorage.removeItem(SCENARIO_ACCESS_STORAGE_KEY);
+    scenarioAccessUnlocked = false;
     renderAt("/scenario");
 
     expect(await screen.findByText(/scenario är låst/i)).toBeInTheDocument();
-    expect(screen.getByText(/ange lösenordet för att fortsätta till scenarioläget/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /öppna scenario \/ projekt/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/scenario-lösenord/i)).toBeInTheDocument();
+    expect(screen.getByText(/ange åtkomstkoden för att fortsätta till scenarioläget/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /lås upp scenario/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/scenario-kod/i)).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/scenario-lösenord/i), "felkod");
-    await userEvent.click(screen.getByRole("button", { name: /öppna scenario \/ projekt/i }));
+    await userEvent.type(screen.getByLabelText(/scenario-kod/i), "felkod");
+    await userEvent.click(screen.getByRole("button", { name: /lås upp scenario/i }));
 
-    expect(await screen.findByText(/fel lösenord\. prova stockholm\./i)).toBeInTheDocument();
+    expect(await screen.findByText(/ogiltig kod/i)).toBeInTheDocument();
   });
 
   it("unlocks the scenario route with the Stockholm passcode", async () => {
-    window.localStorage.removeItem(SCENARIO_ACCESS_STORAGE_KEY);
+    scenarioAccessUnlocked = false;
     renderAt("/scenario");
 
-    await userEvent.type(screen.getByLabelText(/scenario-lösenord/i), "Stockholm");
-    await userEvent.click(screen.getByRole("button", { name: /öppna scenario \/ projekt/i }));
+    await userEvent.type(screen.getByLabelText(/scenario-kod/i), "Stockholm");
+    await userEvent.click(screen.getByRole("button", { name: /lås upp scenario/i }));
 
-    expect(await screen.findByText(/välj scenario för att redigera/i)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /öppna arbetsyta/i })).toBeInTheDocument();
     expect(screen.queryByText(/scenario är låst/i)).not.toBeInTheDocument();
   });
 
   it("opens the workspace, creates a project and scenario, then shows benchmarked scenario results", async () => {
     renderAt("/scenario");
 
+    await screen.findByRole("button", { name: /öppna arbetsyta/i });
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Ny stadsdel 2040");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
@@ -899,6 +929,7 @@ describe("App", () => {
   it("deletes a scenario and project from the workspace", async () => {
     renderAt("/scenario");
 
+    await screen.findByRole("button", { name: /öppna arbetsyta/i });
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Rivningsprojekt");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));
@@ -935,6 +966,7 @@ describe("App", () => {
   it("lets the user draft and import multiple buildings from the table editor", async () => {
     renderAt("/scenario");
 
+    await screen.findByRole("button", { name: /öppna arbetsyta/i });
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
     await userEvent.click(screen.getByRole("button", { name: /skapa projekt/i }));

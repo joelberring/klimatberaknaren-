@@ -71,6 +71,10 @@ export const sessionSchema = z.object({
   organizationId: z.string().min(2)
 });
 
+export const scenarioAccessSchema = z.object({
+  code: z.string().min(1)
+});
+
 export const projectSchema = z.object({
   organizationId: z.string().min(2),
   name: z.string().min(2).max(120),

@@ -23,6 +23,10 @@ export interface ApiHealthResponse {
   };
 }
 
+export interface ScenarioAccessStatusResponse {
+  unlocked: boolean;
+}
+
 async function parseJson<T>(response: Response, requestLabel: string): Promise<T> {
   if (!response.ok) {
     const errorBody = await response.json().catch(async () => {
@@ -36,6 +40,10 @@ async function parseJson<T>(response: Response, requestLabel: string): Promise<T
         : "Ett fel uppstod vid API-anropet";
     const kind = typeof errorBody?.kind === "string" && errorBody.kind.trim().length ? ` [${errorBody.kind}]` : "";
     throw new Error(`${requestLabel} (${status}): ${message}${kind}`);
+  }
+
+  if (response.status === 204 || response.status === 205) {
+    return undefined as T;
   }
 
   return response.json() as Promise<T>;
@@ -76,6 +84,17 @@ export async function fetchWorkspace(organizationId?: string) {
 
 export async function loginSession(payload: CreateSessionRequest) {
   return parseJson<UserSession>(await jsonRequest("/api/session/login", payload), "POST /api/session/login");
+}
+
+export async function fetchScenarioAccessStatus() {
+  return parseJson<ScenarioAccessStatusResponse>(
+    await fetch("/api/scenario-access/status", { credentials: "same-origin" }),
+    "GET /api/scenario-access/status"
+  );
+}
+
+export async function unlockScenarioAccess(payload: { code: string }) {
+  return parseJson<void>(await jsonRequest("/api/scenario-access", payload), "POST /api/scenario-access");
 }
 
 export async function createProjectApi(payload: CreateProjectRequest) {
