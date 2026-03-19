@@ -42,6 +42,13 @@ function pointString(points: FootprintPoint[]) {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
 }
 
+const FOOTPRINT_CANVAS_VIEWBOX = {
+  minX: -60,
+  minY: -42,
+  width: 120,
+  height: 84
+};
+
 export function FootprintShapeEditor({
   value,
   onChange,
@@ -52,23 +59,13 @@ export function FootprintShapeEditor({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const canvasPadding = 18;
 
   const bounds = useMemo(() => getFootprintBounds(value.points), [value.points]);
   const metrics = useMemo(
     () => getFootprintMetrics(value.points, value.heightMeters),
     [value.points, value.heightMeters]
   );
-  const viewBox = useMemo(() => {
-    const width = Math.max(bounds.width + canvasPadding * 2, 96);
-    const height = Math.max(bounds.height + canvasPadding * 2, 72);
-    return {
-      minX: (bounds.minX + bounds.maxX) / 2 - width / 2,
-      minY: (bounds.minY + bounds.maxY) / 2 - height / 2,
-      width,
-      height
-    };
-  }, [bounds.height, bounds.maxX, bounds.maxY, bounds.minX, bounds.minY, bounds.width]);
+  const viewBox = FOOTPRINT_CANVAS_VIEWBOX;
 
   const recalcSelection = (nextPoints: FootprintPoint[]) => {
     if (selectedPointIndex === null || selectedPointIndex < nextPoints.length) {
@@ -256,8 +253,8 @@ export function FootprintShapeEditor({
       </div>
       <p className="microcopy">
         Ange mått direkt, dra i rektangeln för att flytta den, eller växla till polygonläge för att
-        lägga till hörn och få en mer exakt formfaktor. Storleksändringarna visas i en fast skala
-        så att bredd och djup blir läsbara direkt i vyn.
+        lägga till hörn och få en mer exakt formfaktor. Ritytan är låst i en fast skala så att
+        dragning och storleksändringar blir lätta att se direkt i vyn.
       </p>
 
       <div className="footprint-toolbar">

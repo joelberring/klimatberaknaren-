@@ -117,6 +117,14 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+
 .feature-coverage-panel,
 .workspace-panel,
 .secondary-workspace,
@@ -130,6 +138,30 @@ a:focus-visible {
 .feature-coverage-panel {
   display: grid;
   gap: 1rem;
+}
+
+.chooser-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.mode-chooser-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.mode-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mode-card .submit-button {
+  width: fit-content;
+  min-width: 16rem;
 }
 
 .feature-status-row {
@@ -1395,6 +1427,7 @@ select {
   .report-dual-grid,
   .details-grid,
   .intro-meta-row,
+  .mode-chooser-grid,
   .feature-coverage-grid,
   .form-grid,
   .triple-grid,
@@ -1407,6 +1440,10 @@ select {
   }
 
   .workflow-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-chooser-grid {
     grid-template-columns: 1fr;
   }
 

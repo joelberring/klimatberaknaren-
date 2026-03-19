@@ -342,6 +342,11 @@ function createRun(
   };
 }
 
+function renderAt(pathname: string) {
+  window.history.pushState({}, "", pathname);
+  render(<App />);
+}
+
 describe("App", () => {
   beforeEach(() => {
     workspacePayload = {
@@ -744,9 +749,22 @@ describe("App", () => {
     window.history.pushState({}, "", "/");
   });
 
-  it("shows validation error when required numeric fields are missing in quick mode", async () => {
-    render(<App />);
+  it("shows a short chooser on the home route", async () => {
+    renderAt("/");
 
+    expect(await screen.findByText(/välj arbetsläge/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /öppna snabbkalkyl/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /öppna scenario \/ projekt/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /öppna snabbkalkyl/i }));
+    expect(await screen.findByText(/direktläge för enskild byggnad/i)).toBeInTheDocument();
+  });
+
+  it("shows validation error when required numeric fields are missing in quick mode", async () => {
+    renderAt("/quickcalc");
+
+    expect(await screen.findByText(/direktläge för enskild byggnad/i)).toBeInTheDocument();
+    expect(screen.queryByText(/välj scenario för att redigera/i)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
 
     expect(
@@ -755,9 +773,9 @@ describe("App", () => {
   });
 
   it("runs the quick calculator and renders totals plus source metadata", async () => {
-    render(<App />);
+    renderAt("/quickcalc");
 
-    expect(await screen.findByText(/så arbetar du/i)).toBeInTheDocument();
+    expect(await screen.findByText(/direktläge för enskild byggnad/i)).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^Bruttoarea$/i), "1000");
     await userEvent.type(screen.getByLabelText(/^Byggår$/i), "2005");
     await userEvent.click(screen.getByRole("button", { name: /beräkna klimatpåverkan/i }));
@@ -775,9 +793,10 @@ describe("App", () => {
   });
 
   it("shows locked scenario workbench states before a scenario exists", async () => {
-    render(<App />);
+    renderAt("/scenario");
 
-    expect(await screen.findByText(/så arbetar du/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
+    expect(screen.queryByText(/resultat för snabbkalkyl/i)).not.toBeInTheDocument();
     expect(screen.getByText(/välj scenario för att redigera/i)).toBeInTheDocument();
     expect(screen.getByText(/scenario låst/i)).toBeInTheDocument();
     expect(
@@ -790,7 +809,7 @@ describe("App", () => {
   });
 
   it("opens the workspace, creates a project and scenario, then shows benchmarked scenario results", async () => {
-    render(<App />);
+    renderAt("/scenario");
 
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Ny stadsdel 2040");
@@ -828,7 +847,7 @@ describe("App", () => {
   });
 
   it("lets the user draft and import multiple buildings from the table editor", async () => {
-    render(<App />);
+    renderAt("/scenario");
 
     await userEvent.click(screen.getByRole("button", { name: /öppna arbetsyta/i }));
     await userEvent.type(screen.getByPlaceholderText(/ny stadsdel 2040/i), "Tabellprojekt");
@@ -964,7 +983,7 @@ describe("App", () => {
       ]
     };
 
-    render(<App />);
+    renderAt("/scenario");
 
     expect(
       await screen.findByText(/flera varianter mot flera benchmarkprofiler/i)

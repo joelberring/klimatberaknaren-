@@ -754,7 +754,9 @@ function getRunDriverChanges(baseResult: CalculationResult, candidateResult: Cal
 }
 
 type AppRoute =
-  | { kind: "workspace" }
+  | { kind: "home" }
+  | { kind: "quick" }
+  | { kind: "scenario" }
   | { kind: "analysis"; scenarioId: string; runId?: string };
 
 function parseAppRoute(pathname: string, search: string): AppRoute {
@@ -769,7 +771,15 @@ function parseAppRoute(pathname: string, search: string): AppRoute {
     };
   }
 
-  return { kind: "workspace" };
+  if (segments[0] === "quickcalc" || segments[0] === "quick") {
+    return { kind: "quick" };
+  }
+
+  if (segments[0] === "scenario" || segments[0] === "workspace") {
+    return { kind: "scenario" };
+  }
+
+  return { kind: "home" };
 }
 
 function buildAnalysisPath(scenarioId: string, runId?: string) {
@@ -781,6 +791,18 @@ function buildAnalysisPath(scenarioId: string, runId?: string) {
 
   const query = params.toString();
   return `/analysis/${encodeURIComponent(scenarioId)}${query ? `?${query}` : ""}`;
+}
+
+function buildScenarioPath() {
+  return "/scenario";
+}
+
+function buildQuickPath() {
+  return "/quickcalc";
+}
+
+function buildHomePath() {
+  return "/";
 }
 
 type WorkflowRegistryCard = {
@@ -2501,112 +2523,6 @@ export default function App() {
   const analysisSelectedRun = analysisContext?.scenario
     ? getActiveScenarioRun(analysisContext.scenario, route.kind === "analysis" ? route.runId : undefined)
     : null;
-  const currentScenarioRun = getActiveScenarioRun(currentScenario);
-
-  const workflowRegistry: WorkflowRegistryCard[] = [
-    {
-      order: 1,
-      id: "workspace",
-      title: "Arbetsyta",
-      summary: "Projekt, scenarier, körhistorik och scenarioeditor samlas här.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
-      actionLabel: "Till arbetsytan",
-      onAction: () => scrollToSection("workspace-panel")
-    },
-    {
-      order: 2,
-      id: "decision",
-      title: "Beslutsstöd",
-      summary: "Alternativrum för läge, form, typ, konstruktion och robusthet.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: "Tillgänglig lokalt och i preview",
-      actionLabel: "Till beslutsstöd",
-      onAction: () => scrollToSection("decision-workbench")
-    },
-    {
-      order: 3,
-      id: "three-d",
-      title: "3D och form",
-      summary: "Footprint-editor, 3D-massing och klickbar klimat-attribution.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: "Tillgänglig lokalt och i preview",
-      actionLabel: "Till 3D-vyn",
-      onAction: () => scrollToSection("building3d-panel")
-    },
-    {
-      order: 4,
-      id: "results",
-      title: "Resultat och analys",
-      summary: "Rapport, benchmark, körningshistorik och spårbar analysvy.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
-      actionLabel: "Till resultat",
-      onAction: () => scrollToSection("scenario-results")
-    },
-    {
-      order: 5,
-      id: "analysis",
-      title: "Förklarad beräkning",
-      summary: "Steg-för-steg genomgång av indata, vikter och delbidrag.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig via analysroute",
-      deployState: currentScenario ? "Tillgänglig för vald körning" : "Kräver scenario",
-      actionLabel: "Öppna analys",
-      onAction: () => {
-        if (currentScenario?.id) {
-          openAnalysis(currentScenario.id, currentScenarioRun?.id);
-        }
-      },
-      disabled: !currentScenario?.id
-    },
-    {
-      order: 6,
-      id: "compare",
-      title: "Jämförelse",
-      summary: "Benchmarkprofiler, scenario mot scenario och måttval.",
-      codeState: "Byggd i kod",
-      uiState: currentScenario ? "Synlig i UI" : "Kräver scenario",
-      deployState: currentScenario ? (apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll") : "Kräver scenario",
-      actionLabel: "Till jämförelse",
-      onAction: () => scrollToSection("comparison-board"),
-      disabled: !currentScenario
-    },
-    {
-      order: 7,
-      id: "quick",
-      title: "Snabbkalkyl",
-      summary: "Sekundärt direktläge för enstaka byggnad eller snabb screening.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: apiHealth?.ok ? "Verifierad i preview" : "Behöver deploykontroll",
-      actionLabel: "Till snabbkalkyl",
-      onAction: () => scrollToSection("quick-workspace")
-    },
-    {
-      order: 8,
-      id: "import",
-      title: "Importflöden",
-      summary: "GeoJSON, CSV och 3D-modellimport för att fylla scenariot med data.",
-      codeState: "Byggd i kod",
-      uiState: "Synlig i UI",
-      deployState: currentScenario ? "Tillgänglig i valt scenario" : "Kräver scenario",
-      actionLabel: "Till import",
-      onAction: () => scrollToSection("import-panel"),
-      disabled: !currentScenario
-    }
-  ];
-  const primaryWorkflowIds = ["workspace", "decision", "three-d", "results"] as const;
-  const primaryWorkflowCards = workflowRegistry.filter((card) =>
-    primaryWorkflowIds.includes(card.id as (typeof primaryWorkflowIds)[number])
-  );
-  const secondaryWorkflowCards = workflowRegistry.filter(
-    (card) => !primaryWorkflowIds.includes(card.id as (typeof primaryWorkflowIds)[number])
-  );
 
   useEffect(() => {
     if (workspace?.benchmarkProfiles?.length) {
@@ -2666,11 +2582,6 @@ export default function App() {
       window.history.pushState({}, "", url.toString());
     }
     setRoute(parseAppRoute(window.location.pathname, window.location.search));
-  }
-
-  function scrollToSection(id: string) {
-    const element = document.getElementById(id);
-    element?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function openAnalysis(scenarioId: string, runId?: string) {
@@ -3556,6 +3467,191 @@ export default function App() {
     navigateTo(buildAnalysisPath(analysisContext.scenario.id, runId), true);
   }
 
+  function renderChooserPage() {
+    return (
+      <div className="app-shell mode-shell">
+        <section className="panel intro-strip chooser-strip">
+          <div className="intro-title">
+            <p className="eyebrow">Start</p>
+            <h1>Välj arbetsläge</h1>
+            <p className="lede">
+              Börja med snabbkalkyl för ett enskilt koncept eller scenario / projekt för alternativ,
+              historik, analys och jämförelse.
+            </p>
+          </div>
+          <div className="intro-meta-row">
+            <span>Två tydliga ingångar</span>
+            <span>Samma beräkningsmotor bakom kulisserna</span>
+            <span>Icke-relevanta delar döljs helt per läge</span>
+          </div>
+        </section>
+
+        <section className="panel chooser-panel">
+          <div className="section-heading">
+            <p className="eyebrow">Kort väljare</p>
+            <h2>Var vill du börja?</h2>
+            <p className="lede">
+              Snabbkalkyl visar bara screening för en byggnad. Scenario visar projekt, historik,
+              import, analys och jämförelser.
+            </p>
+          </div>
+          <div className="mode-chooser-grid">
+            <article className="mode-card">
+              <div className="feature-coverage-card-head">
+                <div>
+                  <p className="eyebrow">Snabbkalkyl</p>
+                  <h3>Snabb screening</h3>
+                </div>
+                <span className="feature-coverage-chip">Direktläge</span>
+              </div>
+              <p className="microcopy">
+                För enstaka byggnad eller ett tidigt koncept när du vill få ett snabbt resultat utan
+                projektstruktur.
+              </p>
+              <button
+                type="button"
+                className="submit-button"
+                onClick={() => navigateTo(buildQuickPath())}
+              >
+                Öppna snabbkalkyl
+              </button>
+            </article>
+
+            <article className="mode-card">
+              <div className="feature-coverage-card-head">
+                <div>
+                  <p className="eyebrow">Scenario / projekt</p>
+                  <h3>Alternativ och analys</h3>
+                </div>
+                <span className="feature-coverage-chip">Huvudläge</span>
+              </div>
+              <p className="microcopy">
+                För flera scenarier, körhistorik, 3D/form, import och analyser där du behöver jämföra
+                och förklara val.
+              </p>
+              <button
+                type="button"
+                className="submit-button"
+                onClick={() => navigateTo(buildScenarioPath())}
+              >
+                Öppna scenario / projekt
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <section className="panel panel-soft">
+          <div className="feature-status-row">
+            <span>API: {apiHealth?.ok ? "Online" : "Okänd"}</span>
+            <span>PERSISTENS: {apiHealth?.persistence.mode ?? "Okänd"}</span>
+            <span>Workspace: {workspace ? "Laddad" : "Väntar"}</span>
+            <span>Scenario: {currentScenario ? "Aktivt" : "Saknas"}</span>
+          </div>
+        </section>
+
+        {workspaceError ? (
+          <p className="floating-error" role="alert">
+            {workspaceError}
+          </p>
+        ) : null}
+
+        <ExplanationDrawer explanation={activeExplanation} onClose={() => setActiveExplanation(null)} />
+      </div>
+    );
+  }
+
+  function renderQuickPage() {
+    return (
+      <div className="app-shell quick-shell">
+        <section className="panel intro-strip compact-strip">
+          <div className="intro-title">
+            <p className="eyebrow">Snabbkalkyl</p>
+            <h1>Direktläge för enskild byggnad</h1>
+            <p className="lede">
+              Här visas bara snabb screening och resultat för ett koncept. Inga projektscenarier,
+              jämförelser eller importflöden visas på den här sidan.
+            </p>
+          </div>
+          <div className="intro-actions">
+            <button type="button" className="ghost-button" onClick={() => navigateTo(buildHomePath())}>
+              Byt läge
+            </button>
+            <button type="button" className="ghost-button" onClick={() => navigateTo(buildScenarioPath())}>
+              Till scenario / projekt
+            </button>
+          </div>
+          <div className="intro-meta-row">
+            <span>Samma kalkylmotor som scenariot</span>
+            <span>Endast snabb screening och resultat</span>
+            <span>Relevanta delar för ett direktläge</span>
+          </div>
+        </section>
+
+        <section className="panel panel-form quick-panel" id="quick-workspace">
+          <div className="section-heading">
+            <p className="eyebrow">Snabbkalkyl</p>
+            <h2>Räkna ett koncept direkt</h2>
+          </div>
+          {renderCalculationForm(
+            quickForm,
+            updateQuickForm,
+            handleQuickCalculate,
+            isQuickSubmitting ? "Beräknar..." : "Beräkna klimatpåverkan",
+            isQuickSubmitting
+          )}
+          {quickError ? (
+            <p className="form-error" role="alert">
+              {quickError}
+            </p>
+          ) : null}
+        </section>
+
+        <ResultMatrix
+          title="Resultat för snabbkalkyl"
+          result={quickResult}
+          dataSources={dataSources}
+          benchmarkProfiles={allBenchmarkProfiles}
+          standardProfiles={dataSources?.standardProfiles ?? []}
+          selectedBenchmarkIds={selectedBenchmarkIds}
+          selectedStandardIds={selectedStandardIds}
+          selectedMetric={selectedComparisonMetric}
+          onExplain={(traceKey) => openExplanation(quickResult, traceKey)}
+        />
+
+        <section className="panel panel-soft">
+          <div className="section-heading">
+            <p className="eyebrow">Källor</p>
+            <h2>Underlag för snabbkalkylen</h2>
+          </div>
+          {dataSources ? (
+            <ul className="source-list">
+              {dataSources.sources.slice(0, 3).map((source) => (
+                <li key={source.id}>
+                  <a href={source.url} target="_blank" rel="noreferrer">
+                    {source.title}
+                  </a>
+                  <span>
+                    {source.publisher} • {source.license}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="microcopy">Källkatalogen kunde inte laddas just nu.</p>
+          )}
+        </section>
+
+        {workspaceError ? (
+          <p className="floating-error" role="alert">
+            {workspaceError}
+          </p>
+        ) : null}
+
+        <ExplanationDrawer explanation={activeExplanation} onClose={() => setActiveExplanation(null)} />
+      </div>
+    );
+  }
+
   if (route.kind === "analysis") {
     return (
       <div className="app-shell analysis-shell">
@@ -3578,7 +3674,7 @@ export default function App() {
               openExplanation(analysisSelectedRun.result, traceKey);
             }
           }}
-          onBack={() => navigateTo("/", true)}
+          onBack={() => navigateTo(buildScenarioPath(), true)}
           onPrint={() => window.print()}
         />
 
@@ -3591,6 +3687,14 @@ export default function App() {
         <ExplanationDrawer explanation={activeExplanation} onClose={() => setActiveExplanation(null)} />
       </div>
     );
+  }
+
+  if (route.kind === "home") {
+    return renderChooserPage();
+  }
+
+  if (route.kind === "quick") {
+    return renderQuickPage();
   }
 
   return (
@@ -3608,81 +3712,14 @@ export default function App() {
           <span>Screeningnivå för tidiga beslut</span>
           <span>Öppna källor och verifierbara antaganden</span>
         </div>
-      </section>
-
-      <section className="panel feature-coverage-panel">
-        <div className="section-heading">
-          <p className="eyebrow">Så arbetar du</p>
-          <h2>Följ flödet i rätt ordning</h2>
-          <p className="lede">
-            Börja i arbetsytan, gå vidare till beslutsstöd, justera form i 3D-vyn och använd resultatet
-            för att förklara vad som driver utfallet. Övriga verktyg ligger kvar under "Fler verktyg" när du behöver dem.
-          </p>
+        <div className="intro-actions">
+          <button type="button" className="ghost-button" onClick={() => navigateTo(buildHomePath())}>
+            Byt läge
+          </button>
+          <button type="button" className="ghost-button" onClick={() => navigateTo(buildQuickPath())}>
+            Snabbkalkyl
+          </button>
         </div>
-        <div className="feature-status-row">
-          <span>API: {apiHealth?.ok ? "Online" : "Okänd"}</span>
-          <span>PERSISTENS: {apiHealth?.persistence.mode ?? "Okänd"}</span>
-          <span>Workspace: {workspace ? "Laddad" : "Väntar"}</span>
-          <span>Scenario: {currentScenario ? "Aktivt" : "Saknas"}</span>
-        </div>
-        <div className="workflow-guide" aria-label="Rekommenderad ordning">
-          {primaryWorkflowCards.map((card, index) => (
-            <article key={card.id} className="workflow-step">
-              <div className="workflow-step-index">{String(index + 1).padStart(2, "0")}</div>
-              <div className="workflow-step-body">
-                <div className="feature-coverage-card-head">
-                  <div>
-                    <p className="eyebrow">{card.codeState}</p>
-                    <h3>{card.title}</h3>
-                  </div>
-                  <span className="feature-coverage-chip">{card.uiState}</span>
-                </div>
-                <p className="microcopy">{card.summary}</p>
-                <div className="workflow-step-meta">
-                  <span>{card.deployState}</span>
-                  <span>{index === 0 ? "Start här" : index === 1 ? "När du har ett scenario" : "Nästa steg"}</span>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button workflow-step-button"
-                  onClick={card.onAction}
-                  disabled={card.disabled}
-                >
-                  {card.actionLabel}
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <details className="workflow-secondary">
-          <summary>Fler verktyg</summary>
-          <div className="workflow-secondary-grid" aria-label="Fler verktyg">
-            {secondaryWorkflowCards.map((card) => (
-              <article key={card.id} className="feature-coverage-card feature-coverage-card-compact">
-                <div className="feature-coverage-card-head">
-                  <div>
-                    <p className="eyebrow">{card.codeState}</p>
-                    <h3>{card.title}</h3>
-                  </div>
-                  <span className="feature-coverage-chip">{card.uiState}</span>
-                </div>
-                <p className="microcopy">{card.summary}</p>
-                <div className="feature-coverage-meta">
-                  <span>{card.deployState}</span>
-                </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={card.onAction}
-                  disabled={card.disabled}
-                >
-                  {card.actionLabel}
-                </button>
-              </article>
-            ))}
-          </div>
-        </details>
       </section>
 
       <section className="panel workspace-panel" id="workspace-panel">
@@ -4090,38 +4127,6 @@ export default function App() {
               onMetricChange={setSelectedComparisonMetric}
             />
           </>
-      </section>
-
-      <section className="panel secondary-workspace" id="quick-workspace">
-        <div className="section-heading">
-          <p className="eyebrow">Snabbkalkyl</p>
-          <h2>Sekundärt direktläge för enskild byggnad</h2>
-        </div>
-        <section className="panel panel-form quick-panel">
-          {renderCalculationForm(
-            quickForm,
-            updateQuickForm,
-            handleQuickCalculate,
-            isQuickSubmitting ? "Beräknar..." : "Beräkna klimatpåverkan",
-            isQuickSubmitting
-          )}
-          {quickError ? (
-            <p className="form-error" role="alert">
-              {quickError}
-            </p>
-          ) : null}
-        </section>
-        <ResultMatrix
-          title="Resultat för snabbkalkyl"
-          result={quickResult}
-          dataSources={dataSources}
-          benchmarkProfiles={allBenchmarkProfiles}
-          standardProfiles={dataSources?.standardProfiles ?? []}
-          selectedBenchmarkIds={selectedBenchmarkIds}
-          selectedStandardIds={selectedStandardIds}
-          selectedMetric={selectedComparisonMetric}
-          onExplain={(traceKey) => openExplanation(quickResult, traceKey)}
-        />
       </section>
 
       <section className="support-grid">
