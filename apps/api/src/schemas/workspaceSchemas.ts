@@ -14,8 +14,10 @@ import {
   MODEL3D_SOURCE_FORMATS,
   OBJECT_TYPES,
   PARKING_STRUCTURE_TYPES,
+  PROXY_PROFILES,
   SCENARIO_MODES,
-  URBAN_CONTEXTS
+  URBAN_CONTEXTS,
+  normalizeUrbanContext
 } from "../../../../packages/shared/src";
 
 const geometrySchema = z.discriminatedUnion("type", [
@@ -43,6 +45,8 @@ const model3dPartSchema = z.object({
   shareOfTotalPct: z.number().min(0).max(100).optional(),
   note: z.string().max(300).optional()
 });
+
+const urbanContextSchema = z.preprocess((value) => normalizeUrbanContext(value), z.enum(URBAN_CONTEXTS));
 
 export const model3dImportSchema = z.object({
   model: z.object({
@@ -89,12 +93,14 @@ export const scenarioQuickInputSchema = z.object({
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
   buildingForm: z.enum(BUILDING_FORMS).optional(),
-  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
+  urbanContext: urbanContextSchema.optional(),
+  proxyProfile: z.enum(PROXY_PROFILES).optional(),
   specificEnergyUseKwhM2Year: z.number().positive().max(500).optional(),
   estimatedResidents: z.number().min(0).optional(),
   estimatedWorkers: z.number().min(0).optional(),
   siteAreaM2: z.number().positive().max(10_000_000).optional(),
   floorsAboveGround: z.number().int().min(1).max(200).optional(),
+  basementFloors: z.number().int().min(1).max(20).optional(),
   buildingFootprintM2: z.number().positive().max(1_000_000).optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).max(100_000).optional(),
@@ -165,13 +171,15 @@ const planObjectPropertySchema = z.object({
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
   buildingForm: z.enum(BUILDING_FORMS).optional(),
-  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
+  urbanContext: urbanContextSchema.optional(),
+  proxyProfile: z.enum(PROXY_PROFILES).optional(),
   areaHa: z.number().positive().optional(),
   residents: z.number().min(0).optional(),
   workers: z.number().min(0).optional(),
   specificEnergyUseKwhM2Year: z.number().positive().optional(),
   siteAreaM2: z.number().positive().optional(),
   floorsAboveGround: z.number().int().min(1).max(200).optional(),
+  basementFloors: z.number().int().min(1).max(20).optional(),
   buildingFootprintM2: z.number().positive().optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).optional(),

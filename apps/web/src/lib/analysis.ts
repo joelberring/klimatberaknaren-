@@ -1,6 +1,7 @@
 import {
   LABELS,
   formatNumber,
+  labelUrbanContext,
   type BenchmarkProfile,
   type CalculationExplanation,
   type CalculationResult,
@@ -25,6 +26,8 @@ export interface AnalysisTraceRow {
   value: string;
   source: CalculationExplanation["inputs"][number]["source"];
   sourceLabel: string;
+  uncertaintyLevel: "low" | "medium" | "high";
+  uncertaintyLabel: string;
   traceKey: string;
   explanationTitle: string;
   explanationSummary: string;
@@ -67,6 +70,15 @@ export interface AnalysisBenchmarkRow {
   meta?: string;
 }
 
+export interface MobilityFactorRow {
+  id: string;
+  label: string;
+  value: string;
+  note: string;
+  score: number;
+  direction: "transit" | "car" | "mixed";
+}
+
 const inputLabelMap: Record<string, string> = {
   buildingType: "Byggnadstyp",
   grossFloorAreaM2: "Bruttoarea",
@@ -76,6 +88,7 @@ const inputLabelMap: Record<string, string> = {
   heatingType: "Uppvärmning",
   buildingForm: "Byggnadsform",
   urbanContext: "Lägesprofil",
+  proxyProfile: "Proxyprofil",
   specificEnergyUseKwhM2Year: "Specifik energianvändning",
   wallUValue: "Ytterväggens U-värde",
   roofUValue: "Takets U-värde",
@@ -84,6 +97,7 @@ const inputLabelMap: Record<string, string> = {
   estimatedWorkers: "Arbetande",
   siteAreaM2: "Tomtyta",
   floorsAboveGround: "Våningar över mark",
+  basementFloors: "Källarvåningar",
   buildingFootprintM2: "Byggnadsfotavtryck",
   glazingRatioPct: "Glasandel",
   parkingSpaces: "Parkeringsplatser",
@@ -123,6 +137,35 @@ function sourceLabel(source: CalculationExplanation["inputs"][number]["source"])
   }
 
   return "Referensdata";
+}
+
+export function getInputUncertaintyLevel(
+  source: CalculationExplanation["inputs"][number]["source"]
+): "low" | "medium" | "high" {
+  if (source === "user") {
+    return "low";
+  }
+
+  if (source === "derived" || source === "reference") {
+    return "medium";
+  }
+
+  return "high";
+}
+
+export function getInputUncertaintyLabel(
+  source: CalculationExplanation["inputs"][number]["source"]
+): string {
+  const level = getInputUncertaintyLevel(source);
+  if (level === "low") {
+    return "Säker";
+  }
+
+  if (level === "medium") {
+    return "Medel";
+  }
+
+  return "Hög";
 }
 
 export function categoryTraceKey(traceKey: string) {
@@ -187,6 +230,10 @@ function formatValuePath(path: string, value: unknown) {
     return LABELS.urbanContext[value as keyof typeof LABELS.urbanContext] ?? value;
   }
 
+  if (path === "proxyProfile") {
+    return LABELS.proxyProfile[value as keyof typeof LABELS.proxyProfile] ?? "Anpassad";
+  }
+
   if (path === "groundCondition") {
     return LABELS.groundCondition[value as keyof typeof LABELS.groundCondition] ?? value;
   }
@@ -241,6 +288,40 @@ function labelForPath(path: string) {
     .replace(/_/g, " ")
     .replace(/\./g, " / ")
     .replace(/^./, (char) => char.toUpperCase());
+}
+
+function resolveMobilityUseType(buildingType?: CalculateRequest["buildingType"]) {
+  if (buildingType === "smahus" || buildingType === "flerbostadshus") {
+    return "residential";
+  }
+
+  if (buildingType === "skola") {
+    return "education";
+  }
+
+  if (buildingType === "handel") {
+    return "retail";
+  }
+
+  return "workplace";
+}
+
+function resolveServiceTripShare(buildingType?: CalculateRequest["buildingType"]) {
+  const useType = resolveMobilityUseType(buildingType);
+
+  if (useType === "residential") {
+    return 0.06;
+  }
+
+  if (useType === "workplace") {
+    return 0.08;
+  }
+
+  if (useType === "education") {
+    return 0.04;
+  }
+
+  return 0.09;
 }
 
 function getScenarioMetricValue(result: CalculationResult, metric: ComparisonMetric) {
@@ -375,6 +456,13 @@ export function buildSnapshotHighlights(snapshot?: CalculateRequest | null): Ana
     });
   }
 
+  if (snapshot.proxyProfile) {
+    highlights.push({
+      label: "Proxyprofil",
+      value: formatValuePath("proxyProfile", snapshot.proxyProfile)
+    });
+  }
+
   if (snapshot.urbanContext) {
     highlights.push({
       label: "Lägesprofil",
@@ -393,6 +481,13 @@ export function buildSnapshotHighlights(snapshot?: CalculateRequest | null): Ana
     highlights.push({
       label: "Våningar ovan mark",
       value: formatNumber(snapshot.floorsAboveGround)
+    });
+  }
+
+  if (snapshot.basementFloors !== undefined) {
+    highlights.push({
+      label: "Källarvåningar",
+      value: formatNumber(snapshot.basementFloors)
     });
   }
 
@@ -493,6 +588,161 @@ export function buildSnapshotHighlights(snapshot?: CalculateRequest | null): Ana
   return highlights;
 }
 
+function scoreFromRange(value: number, thresholds: Array<{ max: number; score: number }>, fallback: number) {
+  for (const threshold of thresholds) {
+    if (value <= threshold.max) {
+      return threshold.score;
+    }
+  }
+
+  return fallback;
+}
+
+export function buildMobilityFactorRows(
+  snapshot?: CalculateRequest | null,
+  result?: CalculationResult | null
+): MobilityFactorRow[] {
+  const mobility = result?.mobility.inputs;
+  const buildingType = snapshot?.buildingType;
+  const context = snapshot?.urbanContext ?? mobility?.urbanContext;
+  const people = Math.max(result?.population.totalPeople ?? 0, 1);
+  const parkingSpaces = snapshot?.parkingSpaces ?? 0;
+  const parkingIntensity = parkingSpaces / people;
+  const transitStopDistance = mobility?.distanceToTransitStopM ?? snapshot?.transitOverrides?.distanceToTransitStopM;
+  const railDistance = mobility?.distanceToRailStationM ?? snapshot?.transitOverrides?.distanceToRailStationM;
+  const departuresPerHour = mobility?.departuresPerHour ?? snapshot?.transitOverrides?.departuresPerHour ?? 0;
+  const serviceTripShare = resolveServiceTripShare(buildingType);
+
+  const contextScore =
+    context === "stockholm_innerstad"
+      ? 94
+      : context === "central_storstad"
+        ? 80
+        : context === "urban"
+          ? 66
+          : 48;
+
+  const parkingScore = Math.max(0, Math.min(100, Math.round(100 - Math.min(90, parkingIntensity * 90))));
+  const transitScore = transitStopDistance
+    ? scoreFromRange(
+        transitStopDistance,
+        [
+          { max: 400, score: 96 },
+          { max: 700, score: 76 },
+          { max: 1500, score: 48 }
+        ],
+        24
+      )
+    : 18;
+  const railScore = railDistance
+    ? scoreFromRange(
+        railDistance,
+        [
+          { max: 900, score: 96 },
+          { max: 1800, score: 72 },
+          { max: 5000, score: 42 }
+        ],
+        22
+      )
+    : 18;
+  const departuresScore = Math.max(0, Math.min(100, Math.round(departuresPerHour * 8)));
+  const serviceScore = Math.max(0, Math.min(100, Math.round(serviceTripShare * 1000)));
+
+  return [
+    {
+      id: "urbanContext",
+      label: "Lägesprofil",
+      value: labelUrbanContext(context),
+      note:
+        context === "stockholm_innerstad"
+          ? "Stark kollektivtrafik, service och gångbarhet dämpar bilandelen tydligt."
+          : context === "central_storstad"
+            ? "Centralläge med god tillgänglighet och lägre biltryck än generellt urbanläge."
+            : context === "urban"
+              ? "Ett mellanting där bil, kollektivtrafik och gång vägs mer jämnt."
+              : "Förortsläge där bilandel och parkeringsberoende lätt ökar.",
+      score: contextScore,
+      direction:
+        context === "stockholm_innerstad" || context === "central_storstad"
+          ? "transit"
+          : context === "urban"
+            ? "mixed"
+            : "car"
+    },
+    {
+      id: "parking",
+      label: "Bilplatser per person",
+      value: `${formatNumber(parkingIntensity, 2)}`,
+      note:
+        parkingIntensity === 0
+          ? "Inga p-platser gör det svårt att motivera vardagsbilism i modellen."
+          : parkingIntensity < 0.3
+            ? "Låg tillgång till parkering styr vardagsresor mot andra färdmedel."
+            : parkingIntensity < 0.8
+              ? "Medelhög tillgång ger blandad resprofil."
+              : "Hög tillgång till bilplats stärker bilandelen tydligt.",
+      score: parkingScore,
+      direction: parkingIntensity < 0.3 ? "transit" : parkingIntensity < 0.8 ? "mixed" : "car"
+    },
+    {
+      id: "transitStop",
+      label: "Avstånd till hållplats",
+      value: transitStopDistance !== undefined ? `${formatNumber(transitStopDistance)} m` : "Ej angivet",
+      note:
+        transitStopDistance !== undefined
+          ? transitStopDistance <= 400
+            ? "Kort gångavstånd ger stark transitstyrning."
+            : transitStopDistance <= 700
+              ? "Mellanläge med god men inte optimal kollektivtrafikaccess."
+              : "Längre avstånd gör att bil och cykel blir relativt starkare."
+          : "Använd plats eller transitöverskrivning för att se effekten.",
+      score: transitScore,
+      direction: transitScore >= 75 ? "transit" : transitScore >= 45 ? "mixed" : "car"
+    },
+    {
+      id: "railStation",
+      label: "Avstånd till station",
+      value: railDistance !== undefined ? `${formatNumber(railDistance)} m` : "Ej angivet",
+      note:
+        railDistance !== undefined
+          ? railDistance <= 900
+            ? "Tåg- eller stationsnärhet stärker kollektivtrafikandelen tydligt."
+            : railDistance <= 1800
+              ? "Stationsaccess finns men är inte riktigt nära."
+              : "Lång stationsnärhet dämpar rälsandel och höjer biltryck."
+          : "Använd plats eller transitöverskrivning för att se effekten.",
+      score: railScore,
+      direction: railScore >= 75 ? "transit" : railScore >= 45 ? "mixed" : "car"
+    },
+    {
+      id: "departures",
+      label: "Avgångar per timme",
+      value: `${formatNumber(departuresPerHour)} avg/h`,
+      note:
+        departuresPerHour >= 10
+          ? "Hög avgångstäthet gör kollektivtrafiken mer konkurrenskraftig."
+          : departuresPerHour >= 4
+            ? "Måttlig avgångstäthet ger blandad resprofil."
+            : "Låg avgångstäthet ger svagare transitstyrning.",
+      score: departuresScore,
+      direction: departuresScore >= 75 ? "transit" : departuresScore >= 45 ? "mixed" : "car"
+    },
+    {
+      id: "serviceTrips",
+      label: "Service-/besöksresor i modellen",
+      value: `${Math.round(serviceTripShare * 100)} % tillägg`,
+      note:
+        buildingType === "handel"
+          ? "Handel får högre serviceandel eftersom kund- och leveransflöden är större."
+          : buildingType === "skola"
+            ? "Skolor har lägre serviceandel men tydliga dagtidsflöden."
+            : "Serviceandelen är en typologi-proxy för extra vardags- och besöksresor.",
+      score: serviceScore,
+      direction: "mixed"
+    }
+  ];
+}
+
 export function buildTraceRows(result: CalculationResult): AnalysisTraceRow[] {
   const rows = new Map<string, AnalysisTraceRow>();
 
@@ -507,6 +757,7 @@ export function buildTraceRows(result: CalculationResult): AnalysisTraceRow[] {
       const traceKeys = existing?.usedIn ?? [];
       const nextTraceKeys = Array.from(new Set([...traceKeys, explanation.traceKey]));
       const nextSource = existing ? mergeSource(existing.source, input.source) : input.source;
+      const uncertaintyLevel = getInputUncertaintyLevel(nextSource);
 
       rows.set(rowKey, {
         id: rowKey,
@@ -515,6 +766,8 @@ export function buildTraceRows(result: CalculationResult): AnalysisTraceRow[] {
         value: input.value,
         source: nextSource,
         sourceLabel: sourceLabel(nextSource),
+        uncertaintyLevel,
+        uncertaintyLabel: getInputUncertaintyLabel(nextSource),
         traceKey: explanation.traceKey,
         explanationTitle: explanation.title,
         explanationSummary: explanation.summary,

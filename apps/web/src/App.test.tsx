@@ -856,6 +856,33 @@ describe("App", () => {
     );
   });
 
+  it("applies a best practice proxy profile to the uncertain fields", async () => {
+    renderAt("/quickcalc");
+
+    expect(await screen.findByText(/direktläge för enskild byggnad/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/avancerade parametrar/i));
+    await userEvent.selectOptions(screen.getByLabelText(/proxyprofil/i), "bestPractice");
+
+    expect(screen.getByLabelText(/byggnadsform/i)).toHaveValue("kompakt");
+    expect(screen.getByLabelText(/lägesprofil/i)).toHaveValue("stockholm_innerstad");
+    expect(screen.getByLabelText(/markförhållande/i)).toHaveValue("berg_fastmark");
+  });
+
+  it("shows basement floors when the foundation type is set to basement", async () => {
+    renderAt("/quickcalc");
+
+    expect(await screen.findByText(/direktläge för enskild byggnad/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/avancerade parametrar/i));
+    await userEvent.selectOptions(
+      screen.getAllByRole("combobox", { name: /grundläggning/i })[0],
+      "kallare"
+    );
+
+    expect(screen.getByLabelText(/källarvåningar/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/källarvåningar/i), "2");
+    expect(screen.getByLabelText(/källarvåningar/i)).toHaveValue(2);
+  });
+
   it("shows locked scenario workbench states before a scenario exists", async () => {
     scenarioAccessUnlocked = false;
     renderAt("/scenario");
@@ -1117,5 +1144,6 @@ describe("App", () => {
 
     expect(screen.getByText(/uppsala kommunprofil 2026 • normalvärde/i)).toBeInTheDocument();
     expect(screen.getAllByText(/miljöbyggnad nybyggnad 4.1 silver/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/osäkerhet: medel/i).length).toBeGreaterThan(0);
   });
 });

@@ -130,6 +130,75 @@ describe("calculateClimateImpact", () => {
     expect(softSoilGarage.assumptions.some((item) => item.label === "Parkeringslösning")).toBe(true);
   });
 
+  it("infers a källare-like foundation when parking is placed under mark", () => {
+    const garageBelowGrade = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      parkingSpaces: 20,
+      groundCondition: "normal_mark",
+      parkingStructureType: "garage_under_mark",
+      parkingGarageFloors: 2
+    });
+
+    const foundation = garageBelowGrade.embodied.breakdown.find(
+      (item) => item.traceKey === "site.foundation"
+    );
+    const assumptions = garageBelowGrade.assumptions.map((item) => `${item.label}: ${item.value}`);
+
+    expect(foundation?.label).toContain("Källare");
+    expect(garageBelowGrade.explanations.find((item) => item.traceKey === "site.foundation")?.inputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "foundationType", label: "Grundläggningstyp" }),
+        expect.objectContaining({ key: "basementFloors", label: "Källarvåningar" }),
+        expect.objectContaining({ key: "parkingStructureType", label: "Parkeringslösning" }),
+        expect.objectContaining({ key: "parkingGarageFloors", label: "Garagevåningar" })
+      ])
+    );
+    expect(assumptions.some((item) => item.includes("Garage under mark"))).toBe(true);
+  });
+
+  it("raises foundation impact further when additional basement floors are added", () => {
+    const singleBasement = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      foundationType: "kallare",
+      basementFloors: 1,
+      groundCondition: "normal_mark"
+    });
+
+    const doubleBasement = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      foundationType: "kallare",
+      basementFloors: 3,
+      groundCondition: "normal_mark"
+    });
+
+    const singleFoundation = singleBasement.embodied.breakdown.find(
+      (item) => item.traceKey === "site.foundation"
+    );
+    const doubleFoundation = doubleBasement.embodied.breakdown.find(
+      (item) => item.traceKey === "site.foundation"
+    );
+
+    expect(doubleFoundation?.valueKgCo2e).toBeGreaterThan(singleFoundation?.valueKgCo2e ?? 0);
+    expect(
+      doubleBasement.assumptions.some((item) => item.label === "Källarvåningar" && item.value === "3 vån")
+    ).toBe(true);
+  });
+
   it("reduces mobility impact when transit overrides indicate stronger accessibility", () => {
     const lowAccess = calculateClimateImpact({
       buildingType: "flerbostadshus",
@@ -213,13 +282,13 @@ describe("calculateClimateImpact", () => {
     const detailedScreening = calculateClimateImpact({
       buildingType: "flerbostadshus",
       grossFloorAreaM2: 1400,
-      buildYear: 2032,
-      frameMaterial: "betong",
-      energyStandard: "normal",
-      heatingType: "fjarrvarme",
-      buildingForm: "kompakt",
-      urbanContext: "central",
-      floorsAboveGround: 6,
+        buildYear: 2032,
+        frameMaterial: "betong",
+        energyStandard: "normal",
+        heatingType: "fjarrvarme",
+        buildingForm: "kompakt",
+        urbanContext: "stockholm_innerstad",
+        floorsAboveGround: 6,
       buildingFootprintM2: 240,
       siteAreaM2: 5000,
       groundCondition: "sand_grus",

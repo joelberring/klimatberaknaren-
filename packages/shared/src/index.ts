@@ -32,7 +32,14 @@ export const LAND_TYPES = [
 
 export const BUILDING_FORMS = ["kompakt", "normal", "fragmenterad"] as const;
 
-export const URBAN_CONTEXTS = ["central", "urban", "suburban", "perifer"] as const;
+export const URBAN_CONTEXTS = [
+  "stockholm_innerstad",
+  "central_storstad",
+  "urban",
+  "suburban"
+] as const;
+
+export const PROXY_PROFILES = ["bestPractice", "balanced", "conservative"] as const;
 
 export const FOUNDATION_TYPES = [
   "platta_pa_mark",
@@ -103,6 +110,7 @@ export type HeatingType = (typeof HEATING_TYPES)[number];
 export type LandType = (typeof LAND_TYPES)[number];
 export type BuildingForm = (typeof BUILDING_FORMS)[number];
 export type UrbanContext = (typeof URBAN_CONTEXTS)[number];
+export type ProxyProfile = (typeof PROXY_PROFILES)[number];
 export type FoundationType = (typeof FOUNDATION_TYPES)[number];
 export type GroundCondition = (typeof GROUND_CONDITIONS)[number];
 export type ParkingStructureType = (typeof PARKING_STRUCTURE_TYPES)[number];
@@ -116,6 +124,23 @@ export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 export type ComparisonMetric = (typeof COMPARISON_METRICS)[number];
 export type StandardScheme = (typeof STANDARD_SCHEMES)[number];
 export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
+
+export const LEGACY_URBAN_CONTEXT_ALIASES = {
+  central: "central_storstad",
+  perifer: "suburban"
+} as const;
+
+export function normalizeUrbanContext(value: unknown): UrbanContext | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  if ((URBAN_CONTEXTS as readonly string[]).includes(value)) {
+    return value as UrbanContext;
+  }
+
+  return LEGACY_URBAN_CONTEXT_ALIASES[value as keyof typeof LEGACY_URBAN_CONTEXT_ALIASES];
+}
 
 export interface UValues {
   yttervagg?: number;
@@ -151,12 +176,14 @@ export interface CalculateRequest {
   heatingType: HeatingType;
   buildingForm?: BuildingForm;
   urbanContext?: UrbanContext;
+  proxyProfile?: ProxyProfile;
   specificEnergyUseKwhM2Year?: number;
   uValues?: UValues;
   estimatedResidents?: number;
   estimatedWorkers?: number;
   siteAreaM2?: number;
   floorsAboveGround?: number;
+  basementFloors?: number;
   buildingFootprintM2?: number;
   glazingRatioPct?: number;
   parkingSpaces?: number;
@@ -667,11 +694,19 @@ export const LABELS = {
     normal: "Normal",
     fragmenterad: "Fragmenterad"
   },
+  basementFloors: "Källarvåningar",
   urbanContext: {
-    central: "Centralt",
+    stockholm_innerstad: "Stockholm innerstad",
+    central_storstad: "Central annan storstad",
     urban: "Urban",
     suburban: "Förort",
-    perifer: "Perifert"
+    central: "Central annan storstad",
+    perifer: "Förort"
+  },
+  proxyProfile: {
+    bestPractice: "Best practice",
+    balanced: "Balanserad",
+    conservative: "Konservativ"
   },
   foundationType: {
     platta_pa_mark: "Platta på mark",
@@ -727,6 +762,20 @@ export const LABELS = {
     "breeam-se": "BREEAM-SE"
   }
 } as const;
+
+export function labelUrbanContext(value: unknown) {
+  const normalized = normalizeUrbanContext(value);
+
+  if (normalized) {
+    return LABELS.urbanContext[normalized];
+  }
+
+  if (typeof value === "string") {
+    return LABELS.urbanContext[value as keyof typeof LABELS.urbanContext] ?? value;
+  }
+
+  return "";
+}
 
 export const STOCKHOLM_PROFILE_NAME = "Stockholm MVP 2026";
 export const BUILDING_LIFETIME_YEARS = 50;

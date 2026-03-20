@@ -11,6 +11,7 @@ import {
   LAND_TYPES,
   LABELS,
   PARKING_STRUCTURE_TYPES,
+  PROXY_PROFILES,
   RETROFIT_DEPTHS,
   URBAN_CONTEXTS,
   formatNumber,
@@ -26,6 +27,7 @@ import {
   type ScenarioComparison,
   type ScenarioRun,
   type StandardProfile,
+  type ProxyProfile,
   type UserSession,
   type WorkspaceResponse
 } from "../../../packages/shared/src";
@@ -60,7 +62,11 @@ import { LifecycleShareChart } from "./components/LifecycleShareChart";
 import { RunTrendChart } from "./components/RunTrendChart";
 import { Building3DViewer } from "./components/Building3DViewer";
 import { DecisionWorkbench } from "./components/DecisionWorkbench";
-import { getActiveScenarioRun } from "./lib/analysis";
+import {
+  getActiveScenarioRun,
+  getInputUncertaintyLabel,
+  getInputUncertaintyLevel
+} from "./lib/analysis";
 import { BUILDING_TYPE_PRESETS } from "./lib/decisionSupport";
 
 interface FormState {
@@ -72,6 +78,7 @@ interface FormState {
   heatingType: CalculateRequest["heatingType"];
   buildingForm: CalculateRequest["buildingForm"];
   urbanContext: CalculateRequest["urbanContext"];
+  proxyProfile: ProxyProfile | "custom";
   specificEnergyUseKwhM2Year: string;
   wallUValue: string;
   roofUValue: string;
@@ -80,6 +87,7 @@ interface FormState {
   estimatedWorkers: string;
   siteAreaM2: string;
   floorsAboveGround: string;
+  basementFloors: string;
   buildingFootprintM2: string;
   glazingRatioPct: string;
   parkingSpaces: string;
@@ -119,6 +127,7 @@ const initialForm: FormState = {
   heatingType: "fjarrvarme",
   buildingForm: "normal",
   urbanContext: "urban",
+  proxyProfile: "custom",
   specificEnergyUseKwhM2Year: "",
   wallUValue: "",
   roofUValue: "",
@@ -127,6 +136,7 @@ const initialForm: FormState = {
   estimatedWorkers: "",
   siteAreaM2: "",
   floorsAboveGround: "",
+  basementFloors: "",
   buildingFootprintM2: "",
   glazingRatioPct: "",
   parkingSpaces: "",
@@ -165,6 +175,7 @@ function createDraftForm(seed?: Partial<FormState>): FormState {
     urbanContext: "urban",
     parkingStructureType: "none",
     groundCondition: "normal_mark",
+    basementFloors: "",
     ...seed
   };
 
@@ -196,6 +207,85 @@ function applyBuildingTypePresetToForm(form: FormState, buildingType: FormState[
   };
 }
 
+function applyProxyProfileToForm(form: FormState, proxyProfile: FormState["proxyProfile"]): FormState {
+  if (proxyProfile === "custom") {
+    return {
+      ...form,
+      proxyProfile
+    };
+  }
+
+  if (proxyProfile === "bestPractice") {
+    return {
+      ...form,
+      proxyProfile,
+      buildingForm: "kompakt",
+      urbanContext: "stockholm_innerstad",
+      landType: "tidigare_bebyggd",
+      groundCondition: "berg_fastmark",
+      foundationType: "platta_pa_mark",
+      basementFloors: "",
+      parkingStructureType: "none",
+      parkingGarageFloors: ""
+    };
+  }
+
+  if (proxyProfile === "conservative") {
+    return {
+      ...form,
+      proxyProfile,
+      buildingForm: "fragmenterad",
+      urbanContext: "suburban",
+      landType: "gronyta",
+      groundCondition: "fyllning_osaker",
+      foundationType: "palar",
+      basementFloors: "",
+      parkingStructureType: "garage_under_mark",
+      parkingGarageFloors: form.parkingStructureType === "none" ? "2" : form.parkingGarageFloors || "2"
+    };
+  }
+
+  return {
+    ...form,
+    proxyProfile,
+    buildingForm: "normal",
+    urbanContext: "urban",
+    landType: "tidigare_bebyggd",
+    groundCondition: "normal_mark",
+    foundationType: "platta_pa_mark",
+    basementFloors: "",
+    parkingStructureType: "none",
+    parkingGarageFloors: ""
+  };
+}
+
+const PROXY_PROFILE_SENSITIVE_FIELDS = new Set<keyof FormState>([
+  "buildingForm",
+  "urbanContext",
+  "landType",
+  "groundCondition",
+  "foundationType",
+  "basementFloors",
+  "parkingStructureType",
+  "parkingGarageFloors"
+]);
+
+function getProxyProfileBadge(profile: FormState["proxyProfile"]) {
+  if (profile === "bestPractice") {
+    return "Best practice";
+  }
+
+  if (profile === "conservative") {
+    return "Konservativ";
+  }
+
+  if (profile === "custom") {
+    return "Anpassad";
+  }
+
+  return LABELS.proxyProfile[profile];
+}
+
 function toNumber(value: string) {
   if (!value.trim()) {
     return undefined;
@@ -218,6 +308,7 @@ function payloadToForm(payload?: CalculateRequest): FormState {
     heatingType: payload.heatingType,
     buildingForm: payload.buildingForm ?? "normal",
     urbanContext: payload.urbanContext ?? "urban",
+    proxyProfile: payload.proxyProfile ?? "custom",
     specificEnergyUseKwhM2Year: payload.specificEnergyUseKwhM2Year
       ? String(payload.specificEnergyUseKwhM2Year)
       : "",
@@ -229,6 +320,7 @@ function payloadToForm(payload?: CalculateRequest): FormState {
     siteAreaM2: payload.siteAreaM2 ? String(payload.siteAreaM2) : "",
     floorsAboveGround: payload.floorsAboveGround ? String(payload.floorsAboveGround) : "",
     buildingFootprintM2: payload.buildingFootprintM2 ? String(payload.buildingFootprintM2) : "",
+    basementFloors: payload.basementFloors ? String(payload.basementFloors) : "",
     glazingRatioPct: payload.glazingRatioPct ? String(payload.glazingRatioPct) : "",
     parkingSpaces: payload.parkingSpaces ? String(payload.parkingSpaces) : "",
     parkingStructureType: payload.parkingStructureType ?? "none",
@@ -293,6 +385,9 @@ function buildPayload(form: FormState) {
 
   payload.buildingForm = form.buildingForm;
   payload.urbanContext = form.urbanContext;
+  if (form.proxyProfile !== "custom") {
+    payload.proxyProfile = form.proxyProfile;
+  }
 
   const specificEnergyUseKwhM2Year = toNumber(form.specificEnergyUseKwhM2Year);
   if (specificEnergyUseKwhM2Year !== undefined) {
@@ -322,6 +417,11 @@ function buildPayload(form: FormState) {
   const buildingFootprintM2 = toNumber(form.buildingFootprintM2);
   if (buildingFootprintM2 !== undefined) {
     payload.buildingFootprintM2 = buildingFootprintM2;
+  }
+
+  const basementFloors = toNumber(form.basementFloors);
+  if (form.foundationType === "kallare" && basementFloors !== undefined) {
+    payload.basementFloors = basementFloors;
   }
 
   const glazingRatioPct = toNumber(form.glazingRatioPct);
@@ -583,6 +683,9 @@ function InputCatalog({ result }: { result: CalculationResult }) {
                   <div className="input-meta">
                     <span className={`input-origin input-origin-${input.source}`}>
                       {sourceLabel(input.source)}
+                    </span>
+                    <span className={`input-origin input-origin-${getInputUncertaintyLevel(input.source)}`}>
+                      {getInputUncertaintyLabel(input.source)}
                     </span>
                     <span>
                       Källa:{" "}
@@ -1934,6 +2037,7 @@ function ScenarioMatrixEditor({
           siteAreaM2: payload.siteAreaM2,
           floorsAboveGround: payload.floorsAboveGround,
           buildingFootprintM2: payload.buildingFootprintM2,
+          basementFloors: payload.basementFloors,
           glazingRatioPct: payload.glazingRatioPct,
           parkingSpaces: payload.parkingSpaces,
           parkingStructureType: payload.parkingStructureType,
@@ -2244,6 +2348,20 @@ function ScenarioMatrixEditor({
                     }
                     disabled={disabled}
                     placeholder="Default"
+                  />
+                )
+              },
+              {
+                label: "Källarvåningar",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={row.form.basementFloors}
+                    onChange={(event) => updateDraftRow(row.id, "basementFloors", event.target.value)}
+                    disabled={disabled || row.form.foundationType !== "kallare"}
+                    placeholder="1"
                   />
                 )
               },
@@ -2647,9 +2765,29 @@ export default function App() {
         [key]: value
       };
 
-      return key === "buildingType"
-        ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
-        : next;
+      if (key === "proxyProfile") {
+        return applyProxyProfileToForm(next, value as FormState["proxyProfile"]);
+      }
+
+      const withBuildingPreset =
+        key === "buildingType"
+          ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
+          : next;
+
+      if (
+        current.proxyProfile !== "custom" &&
+        key !== "buildingType" &&
+        PROXY_PROFILE_SENSITIVE_FIELDS.has(key)
+      ) {
+        return {
+          ...withBuildingPreset,
+          proxyProfile: "custom"
+        };
+      }
+
+      return current.proxyProfile !== "custom"
+        ? applyProxyProfileToForm(withBuildingPreset, current.proxyProfile)
+        : withBuildingPreset;
     });
   }
 
@@ -2660,9 +2798,29 @@ export default function App() {
         [key]: value
       };
 
-      return key === "buildingType"
-        ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
-        : next;
+      if (key === "proxyProfile") {
+        return applyProxyProfileToForm(next, value as FormState["proxyProfile"]);
+      }
+
+      const withBuildingPreset =
+        key === "buildingType"
+          ? applyBuildingTypePresetToForm(next, value as FormState["buildingType"])
+          : next;
+
+      if (
+        current.proxyProfile !== "custom" &&
+        key !== "buildingType" &&
+        PROXY_PROFILE_SENSITIVE_FIELDS.has(key)
+      ) {
+        return {
+          ...withBuildingPreset,
+          proxyProfile: "custom"
+        };
+      }
+
+      return current.proxyProfile !== "custom"
+        ? applyProxyProfileToForm(withBuildingPreset, current.proxyProfile)
+        : withBuildingPreset;
     });
   }
 
@@ -3198,6 +3356,42 @@ export default function App() {
           <div className="advanced-sections">
             <section>
               <div className="section-heading">
+                <p className="eyebrow">Osäkerhetsramar</p>
+                <h3>Proxyprofil och best practice</h3>
+              </div>
+              <div className="triple-grid">
+                <label className="full-width">
+                  Proxyprofil
+                  <select
+                    value={form.proxyProfile}
+                    onChange={(event) =>
+                      update("proxyProfile", event.target.value as FormState["proxyProfile"])
+                    }
+                  >
+                    <option value="custom">Anpassad</option>
+                    {PROXY_PROFILES.map((option) => (
+                      <option key={option} value={option}>
+                        {LABELS.proxyProfile[option]}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="microcopy">
+                    Väljer en rekommenderad proxyuppsättning för osäkra indata. Manuell ändring av
+                    proxyfält återgår till Anpassad.
+                  </span>
+                </label>
+                <div className="full-width grouped-fields">
+                  <div className="decision-chip-row">
+                    <span className="decision-chip">Säkra värden: direkt inmatade</span>
+                    <span className="decision-chip">Medel: härledd eller refererad</span>
+                    <span className="decision-chip">Hög: default eller proxy</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div className="section-heading">
                 <p className="eyebrow">Ingrepp i befintlig byggnad</p>
                 <h3>Nybyggnad, ombyggnad eller påbyggnad</h3>
               </div>
@@ -3437,6 +3631,22 @@ export default function App() {
                   </select>
                   <span className="microcopy">Justerar grundläggningsposten i embodied-delen.</span>
                 </label>
+                {form.foundationType === "kallare" ? (
+                  <label>
+                    Källarvåningar
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      value={form.basementFloors}
+                      onChange={(event) => update("basementFloors", event.target.value)}
+                      placeholder="Exempel: 1"
+                    />
+                    <span className="microcopy">
+                      Används för att öka grundpåverkan när byggnaden har källare under mark.
+                    </span>
+                  </label>
+                ) : null}
                 <label>
                   Markförhållande
                   <select

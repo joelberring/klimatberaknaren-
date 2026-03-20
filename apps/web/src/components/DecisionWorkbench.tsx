@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
 
 import { formatNumber, type ComparisonMetric, type Project, type Scenario } from "../../../../packages/shared/src";
-import {
-  buildDecisionSummaries,
-  DECISION_OBJECTIVE_LABELS,
-  type DecisionObjective
-} from "../lib/decisionSupport";
+import { buildMobilityFactorRows } from "../lib/analysis";
+import { buildDecisionSummaries, DECISION_OBJECTIVE_LABELS, type DecisionObjective } from "../lib/decisionSupport";
+import { MobilityFactorPanel } from "./MobilityFactorPanel";
 
 interface DecisionWorkbenchProps {
   id?: string;
@@ -78,6 +76,11 @@ export function DecisionWorkbench({
   const canRank = Boolean(project && summaries.length > 0);
   const scenarioCount = project?.scenarios.length ?? 0;
   const topSummary = canRank ? summaries[0] : null;
+  const focusedSummary =
+    summaries.find((summary) => summary.scenarioId === activeScenarioId) ?? topSummary;
+  const mobilityFactorRows = focusedSummary
+    ? buildMobilityFactorRows(focusedSummary.run?.inputSnapshot ?? null, focusedSummary.run?.result ?? null)
+    : [];
 
   return (
     <section className="panel decision-workbench" id={id}>
@@ -112,6 +115,7 @@ export function DecisionWorkbench({
               <span>
                 Poäng {formatNumber(topSummary.objectiveScore)} • {scoreLabel(topSummary.objectiveScore)}
               </span>
+              <span>Osäkerhet: {topSummary.uncertaintyLabel}</span>
             </article>
             <article className="inline-panel">
               <strong>Aktivt scenario</strong>
@@ -126,6 +130,12 @@ export function DecisionWorkbench({
               <span>{topSummary.rationale[1] ?? topSummary.rationale[0]}</span>
             </article>
           </div>
+
+          <MobilityFactorPanel
+            title={`Mobilitetsfaktorer i ${focusedSummary?.scenarioName ?? "det aktiva scenariot"}`}
+            summary="Här bryts lägesprofilen ned i de delar som starkast påverkar vardagsresandet: läge, parkering, hållplatsnärhet, stationnärhet, avgångstäthet och servicepåslag."
+            rows={mobilityFactorRows}
+          />
 
           <div className="decision-grid">
             {summaries.slice(0, 10).map((summary, index) => (
@@ -151,6 +161,7 @@ export function DecisionWorkbench({
                   <span className="decision-chip">{summary.labels.buildingForm}</span>
                   <span className="decision-chip">{summary.labels.urbanContext}</span>
                   <span className="decision-chip">{summary.labels.frameMaterial}</span>
+                  <span className="decision-chip">Osäkerhet: {summary.uncertaintyLabel}</span>
                 </div>
 
                 <div className="decision-signal-grid">
@@ -178,6 +189,7 @@ export function DecisionWorkbench({
                     {formatNumber(summary.climateValue)} {summary.climateUnit}
                   </strong>
                   <span>{summary.benchmarkGap ?? "Ingen benchmark tillgänglig"}</span>
+                  <span>Osäkerhet: {summary.uncertaintyLabel}</span>
                 </div>
 
                 <div className="decision-typology">

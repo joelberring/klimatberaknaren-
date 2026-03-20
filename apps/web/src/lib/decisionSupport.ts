@@ -1,6 +1,7 @@
 import {
   LABELS,
   formatNumber,
+  labelUrbanContext,
   type CalculateRequest,
   type CalculationResult,
   type ComparisonMetric,
@@ -45,6 +46,8 @@ export interface ScenarioDecisionSummary {
   climateValue: number;
   climateUnit: string;
   benchmarkGap?: string;
+  uncertaintyLevel: "low" | "medium" | "high";
+  uncertaintyLabel: string;
   signals: DecisionSignal[];
   labels: {
     buildingType: string;
@@ -90,7 +93,7 @@ export const BUILDING_TYPE_PRESETS: Record<NonNullable<CalculateRequest["buildin
   },
   kontor: {
     buildingForm: "kompakt",
-    urbanContext: "central",
+    urbanContext: "central_storstad",
     floorsAboveGround: 6,
     parkingStructureType: "garage_under_mark",
     parkingGarageFloors: 1,
@@ -116,6 +119,18 @@ export const BUILDING_TYPE_PRESETS: Record<NonNullable<CalculateRequest["buildin
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getUncertaintyLevelLabel(rangePct: number) {
+  if (rangePct <= 14) {
+    return { level: "low" as const, label: "Säker" };
+  }
+
+  if (rangePct <= 24) {
+    return { level: "medium" as const, label: "Medel" };
+  }
+
+  return { level: "high" as const, label: "Hög" };
 }
 
 function uniqueLabels(values: Array<string | undefined>, formatter: (value: string) => string) {
@@ -236,17 +251,18 @@ function scoreLocation(input: CalculateRequest | undefined, result: CalculationR
   const parkingIntensity = parkingSpaces / people;
 
   const base =
-    context === "central"
-      ? 88
-      : context === "urban"
-        ? 74
-        : context === "suburban"
-          ? 56
-          : 38;
+    context === "stockholm_innerstad"
+      ? 94
+      : context === "central_storstad"
+        ? 80
+        : context === "urban"
+          ? 68
+          : 50;
   const accessBonus = accessibility === "high" ? 12 : accessibility === "medium" ? 4 : -10;
-  const parkingPenalty = Math.min(12, parkingIntensity * 18);
+  const parkingPenalty = Math.min(16, parkingIntensity * 22);
+  const garagePenalty = (input?.parkingStructureType ?? "none") === "garage_under_mark" ? 4 : (input?.parkingStructureType ?? "none") === "garage_ovan_mark" ? 2 : 0;
   const missingTransitPenalty = input?.siteLocation || input?.transitOverrides ? 0 : 4;
-  return clampScore(base + accessBonus - parkingPenalty - missingTransitPenalty);
+  return clampScore(base + accessBonus - parkingPenalty - garagePenalty - missingTransitPenalty);
 }
 
 function scoreForm(input: CalculateRequest | undefined, result: CalculationResult) {
@@ -595,6 +611,7 @@ export function buildDecisionSummaries(
     const labels = getScenarioLabels(entry.scenario, entry.input);
     const typology = getTypologySummary(entry.scenario, entry.input);
     const benchmarkGap = getBenchmarkGap(result, selectedMetric);
+    const uncertainty = getUncertaintyLevelLabel(result.uncertaintyRangePct);
     const recommendation =
       objective === "lowestClimate"
         ? "Välj det alternativ som ger lägst klimat per vald måttbild."
@@ -624,6 +641,8 @@ export function buildDecisionSummaries(
       climateValue,
       climateUnit: getScenarioMetricUnit(result, selectedMetric),
       benchmarkGap,
+      uncertaintyLevel: uncertainty.level,
+      uncertaintyLabel: uncertainty.label,
       signals: [
         {
           category: "location",
@@ -660,7 +679,7 @@ export function buildDecisionSummaries(
           category: "robustness",
           title: "Robusthet",
           score: robustnessScore,
-          note: `Osäkerhetsintervall ±${formatNumber(entry.run.result.uncertaintyRangePct)} %`,
+          note: `Osäkerhet ${uncertainty.label} • ±${formatNumber(entry.run.result.uncertaintyRangePct)} %`,
           details: [
             `${entry.run.result.explanations.flatMap((explanation) => explanation.defaultsApplied).length} defaultantaganden`,
             `${entry.run.result.explanations.flatMap((explanation) => explanation.evidence).filter((evidence) => evidence.evidenceType === "internal-assumption").length} proxykällor`

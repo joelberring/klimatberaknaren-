@@ -14,7 +14,7 @@ function makeResult(
     perPerson: number;
     uncertaintyRangePct: number;
     accessibilityBand: "high" | "medium" | "low";
-    urbanContext: "central" | "urban" | "suburban" | "perifer";
+    urbanContext: "stockholm_innerstad" | "central_storstad" | "urban" | "suburban";
     defaultsApplied?: string[];
     internalAssumptionEvidenceCount?: number;
   }
@@ -177,10 +177,10 @@ describe("decisionSupport", () => {
     expect(result.parkingStructureType).toBe(BUILDING_TYPE_PRESETS.kontor.parkingStructureType);
   });
 
-  it("ranks a compact central scenario above a proxy-heavy peripheral one for balance", () => {
-    const centralScenario = makeScenario(
-      "scenario-central",
-      "Centralt kompakt",
+  it("ranks a compact inner-city scenario above a proxy-heavy suburban one for balance", () => {
+    const innerCityScenario = makeScenario(
+      "scenario-inner-city",
+      "Innerstad kompakt",
       {
         buildingType: "flerbostadshus",
         grossFloorAreaM2: 1200,
@@ -189,7 +189,7 @@ describe("decisionSupport", () => {
         energyStandard: "modern",
         heatingType: "fjarrvarme",
         buildingForm: "kompakt",
-        urbanContext: "central",
+        urbanContext: "stockholm_innerstad",
         floorsAboveGround: 6,
         buildingFootprintM2: 220,
         parkingStructureType: "none",
@@ -201,15 +201,15 @@ describe("decisionSupport", () => {
         perPerson: 15000,
         uncertaintyRangePct: 12,
         accessibilityBand: "high",
-        urbanContext: "central",
+        urbanContext: "stockholm_innerstad",
         defaultsApplied: [],
         internalAssumptionEvidenceCount: 0
       })
     );
 
-    const peripheralScenario = makeScenario(
-      "scenario-peripheral",
-      "Perifert garage",
+    const suburbanScenario = makeScenario(
+      "scenario-suburban",
+      "Förort garage",
       {
         buildingType: "kontor",
         grossFloorAreaM2: 1200,
@@ -218,7 +218,7 @@ describe("decisionSupport", () => {
         energyStandard: "normal",
         heatingType: "fjarrvarme",
         buildingForm: "fragmenterad",
-        urbanContext: "perifer",
+        urbanContext: "suburban",
         floorsAboveGround: 2,
         buildingFootprintM2: 700,
         parkingStructureType: "garage_under_mark",
@@ -231,19 +231,19 @@ describe("decisionSupport", () => {
         perPerson: 24000,
         uncertaintyRangePct: 28,
         accessibilityBand: "low",
-        urbanContext: "perifer",
+        urbanContext: "suburban",
         defaultsApplied: ["Byggnadsform", "Parkeringslösning", "Grundläggning"],
         internalAssumptionEvidenceCount: 3
       })
     );
 
     const summaries = buildDecisionSummaries(
-      [centralScenario, peripheralScenario],
+      [innerCityScenario, suburbanScenario],
       "perM2",
       "balance"
     );
 
-    expect(summaries[0]?.scenarioId).toBe("scenario-central");
+    expect(summaries[0]?.scenarioId).toBe("scenario-inner-city");
     expect(summaries[0]?.objectiveScore).toBeGreaterThan(summaries[1]?.objectiveScore ?? 0);
     expect(summaries[0]?.locationScore).toBeGreaterThan(summaries[1]?.locationScore ?? 0);
     expect(summaries[0]?.robustnessScore).toBeGreaterThan(summaries[1]?.robustnessScore ?? 0);

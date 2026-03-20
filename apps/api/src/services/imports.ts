@@ -1,7 +1,8 @@
 import {
   type GeoJsonGeometry,
   type PlanObject,
-  type ScenarioImportTabularRequest
+  type ScenarioImportTabularRequest,
+  normalizeUrbanContext
 } from "../../../../packages/shared/src";
 
 function normalizeString(value: unknown) {
@@ -119,7 +120,7 @@ function toPlanObject(
           : undefined,
       urbanContext:
         properties.urbanContext !== undefined
-          ? (normalizeString(properties.urbanContext) as PlanObject["quickInput"]["urbanContext"])
+          ? normalizeUrbanContext(normalizeString(properties.urbanContext))
           : undefined,
       siteAreaM2:
         properties.siteAreaM2 !== undefined

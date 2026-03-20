@@ -13,7 +13,8 @@ import {
   type Scenario,
   type TargetProfile,
   type UserSession,
-  type WorkspaceResponse
+  type WorkspaceResponse,
+  normalizeUrbanContext
 } from "../../../../packages/shared/src";
 import {
   getPersistenceMode,
@@ -113,11 +114,84 @@ function createId(prefix: string) {
 }
 
 function normalizeScenario(scenario: Scenario): Scenario {
-  const runs = scenario.runs ?? [];
+  let changed = false;
+
+  const normalizeInput = (input?: CalculateRequest) => {
+    if (!input) {
+      return input;
+    }
+
+    const urbanContext = normalizeUrbanContext(input.urbanContext);
+    if (urbanContext === input.urbanContext) {
+      return input;
+    }
+
+    changed = true;
+    return {
+      ...input,
+      urbanContext
+    };
+  };
+
+  const quickInput = normalizeInput(scenario.quickInput);
+  if (quickInput !== scenario.quickInput) {
+    changed = true;
+  }
+
+  const planObjects = scenario.planObjects.map((planObject) => {
+    const normalizedQuickInput = normalizeInput(planObject.quickInput) ?? planObject.quickInput;
+
+    if (normalizedQuickInput === planObject.quickInput) {
+      return planObject;
+    }
+
+    changed = true;
+    return {
+      ...planObject,
+      quickInput: normalizedQuickInput
+    };
+  });
+
+  const runs = (scenario.runs ?? []).map((run) => {
+    const normalizedInputSnapshot = normalizeInput(run.inputSnapshot) ?? run.inputSnapshot;
+
+    if (normalizedInputSnapshot === run.inputSnapshot) {
+      return run;
+    }
+
+    changed = true;
+    return {
+      ...run,
+      inputSnapshot: normalizedInputSnapshot
+    };
+  });
+
+  if (!changed && runs.length > 0) {
+    return {
+      ...scenario,
+      runs
+    };
+  }
+
+  if (!changed && !scenario.latestResult) {
+    return {
+      ...scenario,
+      runs
+    };
+  }
+
+  if (!changed) {
+    return {
+      ...scenario,
+      runs
+    };
+  }
 
   if (runs.length > 0) {
     return {
       ...scenario,
+      quickInput,
+      planObjects,
       runs
     };
   }
@@ -125,19 +199,23 @@ function normalizeScenario(scenario: Scenario): Scenario {
   if (!scenario.latestResult) {
     return {
       ...scenario,
+      quickInput,
+      planObjects,
       runs: []
     };
   }
 
   return {
     ...scenario,
+    quickInput,
+    planObjects,
     runs: [
       {
         id: `run-legacy-${scenario.id}`,
         scenarioId: scenario.id,
         createdAt: scenario.lastCalculatedAt ?? scenario.updatedAt ?? scenario.createdAt,
         result: scenario.latestResult,
-        inputSnapshot: scenario.quickInput
+        inputSnapshot: quickInput
       }
     ]
   };

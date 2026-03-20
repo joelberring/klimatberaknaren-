@@ -24,7 +24,9 @@ import {
   type RecommendedAction,
   type SourceReference,
   type TargetProfile,
-  type TransitOverrides
+  type TransitOverrides,
+  labelUrbanContext,
+  normalizeUrbanContext
 } from "../../../../packages/shared/src";
 
 import { type MobilityReferenceRecord, getReferenceData } from "../lib/referenceData";
@@ -604,16 +606,17 @@ function resolveUrbanContext(
   request: CalculateRequest,
   accessibilityBand: MobilityInputs["accessibilityBand"]
 ): NonNullable<CalculateRequest["urbanContext"]> {
-  if (request.urbanContext) {
-    return request.urbanContext;
+  const normalized = normalizeUrbanContext(request.urbanContext);
+  if (normalized) {
+    return normalized;
   }
 
   if (accessibilityBand === "high") {
-    return "central";
+    return "stockholm_innerstad";
   }
 
   if (accessibilityBand === "medium") {
-    return "urban";
+    return "central_storstad";
   }
 
   return "suburban";
@@ -626,8 +629,13 @@ function resolveGroundCondition(
 }
 
 function inferFoundationTypeFromGround(
-  groundCondition: NonNullable<CalculateRequest["groundCondition"]>
+  groundCondition: NonNullable<CalculateRequest["groundCondition"]>,
+  parkingStructureType: NonNullable<CalculateRequest["parkingStructureType"]>
 ): NonNullable<CalculateRequest["foundationType"]> {
+  if (parkingStructureType === "garage_under_mark") {
+    return "kallare";
+  }
+
   if (groundCondition === "berg_fastmark") {
     return "kantbalk";
   }
@@ -637,6 +645,36 @@ function inferFoundationTypeFromGround(
   }
 
   return "platta_pa_mark";
+}
+
+function resolveFoundationType(request: CalculateRequest): NonNullable<CalculateRequest["foundationType"]> {
+  if (request.foundationType) {
+    return request.foundationType;
+  }
+
+  const groundCondition = resolveGroundCondition(request);
+  const parkingStructureType = resolveParkingStructureType(request);
+  return inferFoundationTypeFromGround(groundCondition, parkingStructureType);
+}
+
+function resolveBasementFloors(
+  request: CalculateRequest,
+  foundationType: NonNullable<CalculateRequest["foundationType"]>,
+  parkingStructureType: NonNullable<CalculateRequest["parkingStructureType"]>
+) {
+  if (foundationType !== "kallare") {
+    return 0;
+  }
+
+  if (request.basementFloors !== undefined) {
+    return request.basementFloors;
+  }
+
+  if (parkingStructureType === "garage_under_mark") {
+    return Math.max(1, request.parkingGarageFloors ?? 1);
+  }
+
+  return 1;
 }
 
 function resolveParkingStructureType(
@@ -777,24 +815,33 @@ function calculateMobility(
   const parkingIntensity =
     people > 0 ? (request.parkingSpaces ?? 0) / Math.max(1, people) : 0;
   const centralityShift =
-    inputs.urbanContext === "central"
-      ? -0.08
-      : inputs.urbanContext === "urban"
-        ? -0.03
-        : inputs.urbanContext === "suburban"
-          ? 0.04
-          : 0.08;
+    inputs.urbanContext === "stockholm_innerstad"
+      ? -0.12
+      : inputs.urbanContext === "central_storstad"
+        ? -0.07
+        : inputs.urbanContext === "urban"
+          ? -0.03
+          : 0.05;
   const accessibilityShift =
     inputs.accessibilityBand === "high"
-      ? -0.04
+      ? -0.05
       : inputs.accessibilityBand === "medium"
         ? 0
-        : 0.05;
+        : 0.06;
+  const parkingShift = clamp(
+    parkingIntensity * mobilityReference.parkingCarShareAdjustmentPerSpacePerPerson * 2.5,
+    0,
+    0.18
+  );
+  const garageShift =
+    resolveParkingStructureType(request) === "garage_under_mark"
+      ? 0.03
+      : resolveParkingStructureType(request) === "garage_ovan_mark"
+        ? 0.015
+        : 0;
   const carShift = Math.min(
-    0.12,
-    parkingIntensity * mobilityReference.parkingCarShareAdjustmentPerSpacePerPerson +
-      centralityShift +
-      accessibilityShift
+    0.18,
+    parkingShift + centralityShift + accessibilityShift + garageShift
   );
   const adjustedCar = clamp(baseProfile.car + carShift, 0, 0.92);
   const transferable = baseProfile.transit + baseProfile.walkCycle;
@@ -852,7 +899,7 @@ function calculateMobility(
       label: "Bilresor",
       valueKgCo2e: round(annualCarKg),
       unit: "kgCO2e",
-      note: `${Math.round(normalizedProfile.car * 100)} % av resprofilen • ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()}t läge`,
+      note: `${Math.round(normalizedProfile.car * 100)} % av resprofilen • ${labelUrbanContext(inputs.urbanContext).toLowerCase()}t läge`,
       traceKey: "mobility.car"
     },
     {
@@ -878,7 +925,7 @@ function calculateMobility(
       ? "Mobilitetsprofil defaultades till medium tillgänglighet eftersom koordinat eller transitavstånd saknas."
       : null,
     request.urbanContext === undefined
-      ? `Lägesprofil defaultades till ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} utifrån tillgänglighetsband.`
+      ? `Lägesprofil defaultades till ${labelUrbanContext(inputs.urbanContext).toLowerCase()} utifrån tillgänglighetsband.`
       : null
   ].filter((value): value is string => Boolean(value));
 
@@ -904,7 +951,7 @@ function calculateMobility(
         {
           key: "urbanContext",
           label: "Lägesprofil",
-          value: LABELS.urbanContext[inputs.urbanContext],
+          value: labelUrbanContext(inputs.urbanContext),
           source: request.urbanContext !== undefined ? "user" : "derived"
         },
         {
@@ -930,7 +977,7 @@ function calculateMobility(
       [
         "Mobilitetsdelen ar en konservativ plats- och tillganglighetsproxy, inte en individuell reseprognos.",
         "GTFS-data ar representerade via versionsstyrd referensprofil i stallet for live-anrop i runtime.",
-        `Lägesprofil ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} användes för att minska bilanvändning i centrala lägen.`
+        `Lägesprofil ${labelUrbanContext(inputs.urbanContext).toLowerCase()} användes för att minska bilanvändning i centrala lägen.`
       ]
     ),
     explanation(
@@ -972,7 +1019,7 @@ function calculateMobility(
       "explanation-mobility-car",
       "mobility.car",
       "Bilresor",
-      "Bilandelen justeras försiktigt uppåt när parkeringstalet är högt och lägesprofilen är mer perifer, och nedåt i centrala lägen.",
+      "Bilandelen justeras uppåt när parkeringstalet är högt eller läget är mer bilorienterat, och nedåt i innerstadsläge och stark kollektivtrafik.",
       "antal resor x bilandel x reseavstand x utslappsfaktor",
       [
         `${Math.round(annualTrips)} resor/år x ${Math.round(normalizedProfile.car * 100)} % x ${mobilityReference.avgTripLengthKmByMode.car} km`,
@@ -982,14 +1029,20 @@ function calculateMobility(
         {
           key: "parkingIntensity",
           label: "Parkeringstal per person",
-          value: people > 0 ? (parkingIntensity).toFixed(2) : "0.00",
+          value: people > 0 ? parkingIntensity.toFixed(2) : "0.00",
           source: "derived"
         },
         {
           key: "urbanContext",
           label: "Lägesprofil",
-          value: LABELS.urbanContext[inputs.urbanContext],
+          value: labelUrbanContext(inputs.urbanContext),
           source: request.urbanContext !== undefined ? "user" : "derived"
+        },
+        {
+          key: "parkingStructureType",
+          label: "Parkeringslösning",
+          value: LABELS.parkingStructureType[resolveParkingStructureType(request)],
+          source: request.parkingStructureType !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
@@ -1051,7 +1104,7 @@ function calculateMobility(
       ]),
       [
         "Posten ar en forenklad proxy for service- och besoksfloden i tidigt skede.",
-        `Lägesprofil ${LABELS.urbanContext[inputs.urbanContext].toLowerCase()} användes för att justera bilanvändning i linje med centralitetsforskning.`
+        `Lägesprofil ${labelUrbanContext(inputs.urbanContext).toLowerCase()} användes för att justera bilanvändning i linje med centralitetsforskning.`
       ]
     )
   ];
@@ -1108,8 +1161,9 @@ function calculateCoreCase(
   const parkingSpaces = request.parkingSpaces ?? 0;
   const landType = request.landType ?? "tidigare_bebyggd";
   const groundCondition = resolveGroundCondition(request);
-  const foundationType = request.foundationType ?? inferFoundationTypeFromGround(groundCondition);
   const parkingStructureType = resolveParkingStructureType(request);
+  const foundationType = resolveFoundationType(request);
+  const basementFloors = resolveBasementFloors(request, foundationType, parkingStructureType);
   const parkingGarageFloors =
     parkingStructureType === "none" ? 0 : request.parkingGarageFloors ?? 1;
   const siteAreaM2 = request.siteAreaM2;
@@ -1131,7 +1185,14 @@ function calculateCoreCase(
       ? `Markförhållandet defaultades till ${LABELS.groundCondition[groundCondition].toLowerCase()}.`
       : null,
     request.foundationType === undefined
-      ? `Grundläggning defaultades till ${LABELS.foundationType[foundationType].toLowerCase()} utifrån markförhållanden.`
+      ? `Grundläggning defaultades till ${LABELS.foundationType[foundationType].toLowerCase()} utifrån ${
+          parkingStructureType === "garage_under_mark"
+            ? "garage under mark"
+            : `markförhållanden (${LABELS.groundCondition[groundCondition].toLowerCase()})`
+        }.`
+      : null,
+    foundationType === "kallare" && request.basementFloors === undefined
+      ? `Källarvåningar defaultades till ${basementFloors}.`
       : null,
     request.parkingStructureType === undefined
       ? "Parkeringslösning defaultades till inget garage."
@@ -1151,8 +1212,14 @@ function calculateCoreCase(
     typology.supplementaryKgCo2ePerM2.foundation * floorsAboveGround;
   const foundationMultiplier = emissions.foundationMultipliers[foundationType];
   const foundationGroundMultiplier = emissions.foundationGroundMultipliers[groundCondition] ?? 1;
+  const foundationDepthMultiplier =
+    foundationType === "kallare" ? 1 + Math.max(0, basementFloors - 1) * 0.3 : 1;
   const foundationKgCo2e = round(
-    buildingFootprintM2 * baseFoundationPerFootprint * foundationMultiplier * foundationGroundMultiplier
+    buildingFootprintM2 *
+      baseFoundationPerFootprint *
+      foundationMultiplier *
+      foundationGroundMultiplier *
+      foundationDepthMultiplier
   );
   const parkingStructureBaseMultiplier =
     emissions.parkingStructureMultipliers[parkingStructureType] ?? 1;
@@ -1349,7 +1416,7 @@ function calculateCoreCase(
       "Grundläggning räknas från härlett eller angivet fotavtryck och justeras med vald grundläggningstyp samt markförhållanden.",
       "byggnadsfotavtryck x grundfaktor per m2 fotavtryck x multiplikator för grundläggning x markfaktor",
       [
-        `${round(buildingFootprintM2)} m2 x ${round(baseFoundationPerFootprint)} kg CO2e/m2 x ${foundationMultiplier.toFixed(2)} x ${foundationGroundMultiplier.toFixed(2)}`,
+        `${round(buildingFootprintM2)} m2 x ${round(baseFoundationPerFootprint)} kg CO2e/m2 x ${foundationMultiplier.toFixed(2)} x ${foundationGroundMultiplier.toFixed(2)} x ${foundationDepthMultiplier.toFixed(2)}`,
         `= ${foundationKgCo2e} kg CO2e`
       ],
       [
@@ -1360,10 +1427,45 @@ function calculateCoreCase(
           source: request.buildingFootprintM2 !== undefined ? "user" : "derived"
         },
         {
+          key: "foundationType",
+          label: "Grundläggningstyp",
+          value: LABELS.foundationType[foundationType],
+          source: request.foundationType !== undefined ? "user" : "derived"
+        },
+        {
           key: "groundCondition",
           label: "Markförhållande",
           value: LABELS.groundCondition[groundCondition],
           source: request.groundCondition !== undefined ? "user" : "default"
+        },
+        {
+          key: "basementFloors",
+          label: "Källarvåningar",
+          value: foundationType === "kallare" ? String(basementFloors) : "0",
+          source:
+            foundationType === "kallare"
+              ? request.basementFloors !== undefined
+                ? "user"
+                : "default"
+              : "default"
+        },
+        {
+          key: "parkingStructureType",
+          label: "Parkeringslösning",
+          value: LABELS.parkingStructureType[parkingStructureType],
+          source: request.parkingStructureType !== undefined ? "user" : "default"
+        },
+        {
+          key: "parkingGarageFloors",
+          label: "Garagevåningar",
+          value:
+            parkingStructureType === "none"
+              ? "0"
+              : String(parkingGarageFloors),
+          source:
+            parkingStructureType === "none" || request.parkingGarageFloors !== undefined
+              ? "user"
+              : "default"
         }
       ],
       defaultsApplied,
@@ -1374,7 +1476,9 @@ function calculateCoreCase(
       ]),
       [
         "Proxy för screening i tidigt skede.",
-        "Mjuka jordar som lera och gyttja kan driva upp behovet av pålning och annan markförstärkning.",
+        parkingStructureType === "garage_under_mark"
+          ? "Garage under mark ger en källarlik underbyggnad som ofta ökar grundläggningens klimatpåverkan."
+          : "Mjuka jordar som lera och gyttja kan driva upp behovet av pålning och annan markförstärkning.",
         "Ersätter inte geoteknisk eller konstruktiv dimensionering."
       ]
     ),
@@ -1560,7 +1664,10 @@ function calculateCoreCase(
           "Screeningpost för kommunal jämförelse, inte kalkyl för exakt anläggningsprojektering.",
           parkingStructureType === "none"
             ? "Markparkering antas när ingen garage- eller underjordslösning anges."
-            : `${parkingGarageFloors} garagevåningar användes som proxy för strukturell komplexitet.`
+            : `${parkingGarageFloors} garagevåningar användes som proxy för strukturell komplexitet.`,
+          foundationType === "kallare"
+            ? `${basementFloors} källarvåningar användes för att skala upp grundpåverkan.`
+            : "Källarhöjd var inte aktuell i den valda grundtypen."
         ]
       )
     );
@@ -1749,12 +1856,22 @@ function estimateUncertaintyRangePct(
     range += 1;
   }
 
+  if (request.foundationType === "kallare" && request.basementFloors === undefined) {
+    range += 2;
+  }
+
   if (request.interventionType && request.interventionType !== "nybyggnad") {
     range += 3;
   }
 
   if (mobility.inputs.source === "default") {
     range += 3;
+  }
+
+  if (request.proxyProfile === "bestPractice") {
+    range -= 2;
+  } else if (request.proxyProfile === "conservative") {
+    range += 2;
   }
 
   range += Math.min(6, Math.max(0, core.defaultsApplied.length * 0.5));
@@ -1826,8 +1943,22 @@ function finaliseResult(input: {
       value: LABELS.buildingForm[input.request.buildingForm ?? "normal"]
     },
     {
+      label: "Proxyprofil",
+      value:
+        input.request.proxyProfile
+          ? LABELS.proxyProfile[input.request.proxyProfile]
+          : "Anpassad"
+    },
+    {
       label: "Markförhållande",
       value: LABELS.groundCondition[input.request.groundCondition ?? "normal_mark"]
+    },
+    {
+      label: "Källarvåningar",
+      value:
+        input.request.foundationType === "kallare"
+          ? `${input.request.basementFloors ?? 1} vån`
+          : "Ej källare"
     },
     {
       label: "Parkeringslösning",
@@ -1840,7 +1971,7 @@ function finaliseResult(input: {
     },
     {
       label: "Lägesprofil",
-      value: LABELS.urbanContext[input.mobility.inputs.urbanContext]
+      value: labelUrbanContext(input.mobility.inputs.urbanContext)
     },
     {
       label: "Mobilitetsprofil",

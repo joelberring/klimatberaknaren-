@@ -14,11 +14,13 @@ import { BenchmarkPositionChart } from "./BenchmarkPositionChart";
 import { BreakdownChart } from "./BreakdownChart";
 import { GeoJsonMap } from "./GeoJsonMap";
 import { ExplainButton } from "./ExplainButton";
+import { MobilityFactorPanel } from "./MobilityFactorPanel";
 import { RunTrendChart } from "./RunTrendChart";
 import {
   buildBenchmarkComparisons,
   buildBenchmarkRows,
   buildBranchRows,
+  buildMobilityFactorRows,
   buildInputTraceRows,
   buildRunComparisonRows,
   buildSnapshotHighlights,
@@ -27,6 +29,7 @@ import {
   findExplanationByTraceKey,
   getActiveScenarioRun,
   getComparisonScenarioRun,
+  getInputUncertaintyLabel,
   resolveSourceTitles
 } from "../lib/analysis";
 
@@ -142,6 +145,7 @@ export function AnalysisPage({
   const snapshotHighlights = buildSnapshotHighlights(inputSnapshot);
   const traceRows = buildInputTraceRows(result);
   const branchRows = buildBranchRows(result);
+  const mobilityFactorRows = buildMobilityFactorRows(inputSnapshot, result);
   const traceEntries = buildTraceEntries(result);
   const benchmarkRows = buildBenchmarkRows(
     result,
@@ -258,6 +262,12 @@ export function AnalysisPage({
           </article>
         ))}
       </section>
+
+      <MobilityFactorPanel
+        title="Läge, parkering och kollektivtrafik"
+        summary="Panelen visar vilka platsfaktorer som i modellen driver bilandel, transitandel och servicepåslag. Högre poäng betyder starkare transitstöd eller lägre biltryck, medan parkeringsrad och serviceandel visar hur mycket vardagsresandet pressas åt ett mer bil- eller flerresedrivet håll."
+        rows={mobilityFactorRows}
+      />
 
       <section className="report-dual-grid">
         <section className="report-card">
@@ -457,6 +467,9 @@ export function AnalysisPage({
               <div>{row.value}</div>
               <div>
                 <span className={`input-origin input-origin-${row.source}`}>{row.sourceLabel}</span>
+                <span className={`input-origin input-origin-${row.uncertaintyLevel}`}>
+                  {row.uncertaintyLabel}
+                </span>
               </div>
               <div className="analysis-trace-action">
                 <span>{row.usedIn.join(", ")}</span>
@@ -501,6 +514,7 @@ export function AnalysisPage({
                       <strong>{input.label}</strong>
                       <span>{input.value}</span>
                       <span>{sourceLabel(input.source)}</span>
+                      <span>{getInputUncertaintyLabel(input.source)}</span>
                     </div>
                   ))}
                 </div>

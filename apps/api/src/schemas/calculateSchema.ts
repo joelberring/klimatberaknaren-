@@ -11,8 +11,11 @@ import {
   INTERVENTION_TYPES,
   LAND_TYPES,
   PARKING_STRUCTURE_TYPES,
-  URBAN_CONTEXTS
+  URBAN_CONTEXTS,
+  normalizeUrbanContext
 } from "../../../../packages/shared/src";
+
+const urbanContextSchema = z.preprocess((value) => normalizeUrbanContext(value), z.enum(URBAN_CONTEXTS));
 
 const existingBuildingSchema = z.object({
   grossFloorAreaM2: z.number().positive().max(1_000_000),
@@ -30,12 +33,13 @@ export const calculateSchema = z.object({
   energyStandard: z.enum(ENERGY_STANDARDS),
   heatingType: z.enum(HEATING_TYPES),
   buildingForm: z.enum(BUILDING_FORMS).optional(),
-  urbanContext: z.enum(URBAN_CONTEXTS).optional(),
+  urbanContext: urbanContextSchema.optional(),
   specificEnergyUseKwhM2Year: z.number().positive().max(500).optional(),
   estimatedResidents: z.number().min(0).max(1_000_000).optional(),
   estimatedWorkers: z.number().min(0).max(1_000_000).optional(),
   siteAreaM2: z.number().positive().max(10_000_000).optional(),
   floorsAboveGround: z.number().int().min(1).max(200).optional(),
+  basementFloors: z.number().int().min(1).max(20).optional(),
   buildingFootprintM2: z.number().positive().max(1_000_000).optional(),
   glazingRatioPct: z.number().min(0).max(100).optional(),
   parkingSpaces: z.number().min(0).max(100_000).optional(),

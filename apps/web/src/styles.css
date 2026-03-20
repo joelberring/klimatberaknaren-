@@ -1043,56 +1043,109 @@ select {
   gap: 0.75rem;
 }
 
-.benchmark-axis {
-  position: relative;
-  min-height: 180px;
-  margin-top: 0.5rem;
-  padding: 1rem 0.5rem 0 0.5rem;
-  border-top: 1px solid var(--line);
-}
-
-.benchmark-axis-line {
-  position: absolute;
-  left: 0.5rem;
-  right: 0.5rem;
-  top: 2.4rem;
-  height: 1px;
-  background: var(--line);
-}
-
-.benchmark-axis-point {
-  position: absolute;
-  top: 0.5rem;
-  transform: translateX(-50%);
+.benchmark-list {
   display: grid;
-  gap: 0.15rem;
-  max-width: 160px;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
-.benchmark-point {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.benchmark-row-card {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem;
   border: 1px solid var(--line);
   background: #fff;
 }
 
-.benchmark-point-actual {
+.benchmark-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.benchmark-row-labels {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.benchmark-row-kind {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.benchmark-row-kind-actual {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.benchmark-row-kind-target {
+  background: #e8e8e8;
+}
+
+.benchmark-row-kind-benchmark {
+  background: #fff;
+}
+
+.benchmark-row-kind-standard {
+  background: #f2f2f2;
+}
+
+.benchmark-row-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.benchmark-row-meter {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.benchmark-row-track {
+  height: 12px;
+  border: 1px solid var(--line);
+  background: #f7f7f7;
+  overflow: hidden;
+}
+
+.benchmark-row-fill {
+  display: block;
+  height: 100%;
+}
+
+.benchmark-row-fill-actual {
   background: var(--ink);
 }
 
-.benchmark-point-target {
-  background: #ddd;
+.benchmark-row-fill-benchmark {
+  background: #888;
 }
 
-.benchmark-point-standard {
-  background: repeating-linear-gradient(
-    45deg,
-    #fff,
-    #fff 2px,
-    #222 2px,
-    #222 4px
-  );
+.benchmark-row-fill-target {
+  background: #bbb;
+}
+
+.benchmark-row-fill-standard {
+  background: #d6d6d6;
+}
+
+.benchmark-row-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .trend-chart {
@@ -1167,6 +1220,97 @@ select {
 .bar-fill {
   height: 100%;
   background: var(--ink);
+}
+
+.mobility-factor-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.mobility-factor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.mobility-factor-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.mobility-factor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.mobility-factor-head strong {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.mobility-factor-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mobility-factor-tag-transit {
+  background: #e9ece8;
+}
+
+.mobility-factor-tag-car {
+  background: #faf2f2;
+}
+
+.mobility-factor-tag-mixed {
+  background: #f2f2f2;
+}
+
+.mobility-factor-value {
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mobility-factor-track {
+  height: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  overflow: hidden;
+}
+
+.mobility-factor-fill {
+  display: block;
+  height: 100%;
+}
+
+.mobility-factor-fill-transit {
+  background: var(--ink);
+}
+
+.mobility-factor-fill-car {
+  background: #7d7d7a;
+}
+
+.mobility-factor-fill-mixed {
+  background: repeating-linear-gradient(
+    90deg,
+    #111,
+    #111 4px,
+    #fff 4px,
+    #fff 8px
+  );
 }
 
 .comparison-track-benchmark,
@@ -1545,10 +1689,6 @@ select {
     width: min(100% - 1rem, 1440px);
   }
 
-  .benchmark-axis {
-    min-height: 260px;
-  }
-
   .explanation-drawer {
     left: 1rem;
     width: auto;
@@ -1668,13 +1808,15 @@ select {
     page-break-inside: avoid;
   }
 
-  .benchmark-point-actual,
+  .benchmark-row-fill-actual,
   .bar-fill,
   .lifecycle-segment-embodied {
     background: #000 !important;
   }
 
-  .benchmark-point-target,
+  .benchmark-row-fill-target,
+  .benchmark-row-fill-standard,
+  .benchmark-row-fill-benchmark,
   .comparison-fill-benchmark,
   .lifecycle-segment-operational,
   .map-gradient {
