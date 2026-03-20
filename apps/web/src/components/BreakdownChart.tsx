@@ -4,10 +4,12 @@ import { ExplainButton } from "./ExplainButton";
 interface BreakdownChartProps {
   title: string;
   items: BreakdownItem[];
+  scopeLabel?: string;
+  scopeNote?: string;
   onExplain?: (traceKey: string) => void;
 }
 
-export function BreakdownChart({ title, items, onExplain }: BreakdownChartProps) {
+export function BreakdownChart({ title, items, scopeLabel, scopeNote, onExplain }: BreakdownChartProps) {
   const max = Math.max(...items.map((item) => item.valueKgCo2e), 1);
 
   return (
@@ -16,6 +18,12 @@ export function BreakdownChart({ title, items, onExplain }: BreakdownChartProps)
         <p className="eyebrow">Uppdelning</p>
         <h3>{title}</h3>
       </div>
+      {scopeLabel || scopeNote ? (
+        <div className="benchmark-scope-copy">
+          {scopeLabel ? <span className="scope-badge">{scopeLabel}</span> : null}
+          {scopeNote ? <p className="microcopy">{scopeNote}</p> : null}
+        </div>
+      ) : null}
       <div className="bars" role="img" aria-label={title}>
         {items.map((item) => (
           <div className="bar-row" key={item.key}>

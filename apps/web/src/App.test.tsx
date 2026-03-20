@@ -938,11 +938,16 @@ describe("App", () => {
 
     expect(await screen.findByText(/kommunalt scenarioresultat/i)).toBeInTheDocument();
     expect(screen.getByText(/benchmarkstatus och referenser/i)).toBeInTheDocument();
+    expect(screen.getByText(/benchmarkerna är screeningreferenser på valt nyckeltal/i)).toBeInTheDocument();
+    expect(screen.getByText(/total livscykel/i)).toBeInTheDocument();
+    expect(screen.getByText(/embodied a1-a5/i)).toBeInTheDocument();
+    expect(screen.getByText(/drift \/ b6/i)).toBeInTheDocument();
     expect(screen.getByText(/jämför två sparade körningar/i)).toBeInTheDocument();
     expect(screen.getByText(/trend och fördelning/i)).toBeInTheDocument();
     expect(screen.getByText(/geojson \+ glb\/gltf med klickbar klimat-attribution/i)).toBeInTheDocument();
     expect(screen.getAllByText(/normal/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/minska stommens klimatavtryck/i)).toBeInTheDocument();
+    expect(screen.getByText(/site \/ läge/i)).toBeInTheDocument();
 
     const stockholmQuickSelect = await screen.findByRole("button", { name: /fyll stockholm/i });
     await userEvent.click(stockholmQuickSelect);

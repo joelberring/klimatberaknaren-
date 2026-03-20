@@ -26,6 +26,12 @@ import {
   buildSnapshotHighlights,
   buildTraceEntries,
   buildTrendPoints,
+  getBenchmarkCoverageLabel,
+  getBenchmarkReferenceTypeLabel,
+  getBenchmarkScopeDiagramCopy,
+  getBenchmarkScopeSummaryCopy,
+  getResultScopeLabel,
+  getResultScopeNote,
   findExplanationByTraceKey,
   getActiveScenarioRun,
   getComparisonScenarioRun,
@@ -325,20 +331,26 @@ export function AnalysisPage({
           <p className="eyebrow">Benchmark</p>
           <h2>Jämförelse mot referenser och standardprofiler</h2>
         </div>
-        <p className="microcopy">
-          Vald visning: {getMetricLabel(selectedMetric)}. Resultatet jämförs mot kommunprofil och
-          valda standardprofiler.
-        </p>
+        <p className="microcopy">{getBenchmarkScopeSummaryCopy(selectedMetric)}</p>
         <div className="report-dual-grid">
           <BenchmarkPositionChart
             title={`Position för ${getMetricLabel(selectedMetric).toLowerCase()}`}
             unit={getMetricUnit(result, selectedMetric)}
             rows={benchmarkRows}
+            scopeLabel={getResultScopeLabel("total")}
+            scopeNote={getBenchmarkScopeDiagramCopy(selectedMetric)}
           />
           <section className="report-card">
             <div className="section-heading">
               <p className="eyebrow">Gap</p>
               <h3>Jämförelseutfall</h3>
+            </div>
+            <div className="benchmark-scope-copy">
+              <span className="scope-badge">Screeningreferenser</span>
+              <p className="microcopy">
+                Kommunprofiler och standardprofiler är referenser för tidiga skeden, inte
+                officiella certifieringsutfall.
+              </p>
             </div>
             <div className="comparison-list">
               {benchmarkComparisons.map((item) => (
@@ -360,10 +372,13 @@ export function AnalysisPage({
                 .map((profile) => (
                   <div key={profile.id} className="report-table-row">
                     <strong>{profile.name}</strong>
-                    <span>{profile.applicability}</span>
+                    <span>
+                      {getBenchmarkReferenceTypeLabel(profile)} • {profile.applicability}
+                    </span>
                     <span>
                       {profile.sourceLabel} • v{profile.version} • {profile.updatedAt}
                     </span>
+                    <span>{getBenchmarkCoverageLabel(profile)}</span>
                   </div>
                 ))}
               {standardProfiles
@@ -371,11 +386,13 @@ export function AnalysisPage({
                 .map((profile) => (
                   <div key={profile.id} className="report-table-row">
                     <strong>{profile.label}</strong>
+                    <span>{getBenchmarkReferenceTypeLabel(profile)}</span>
                     <span>{profile.summary}</span>
                     <span>
                       {resolveSourceTitles(profile.sourceIds, dataSources).join(", ") ||
                         "Bundlad referenskälla"}
                     </span>
+                    <span>{getBenchmarkCoverageLabel(profile)}</span>
                   </div>
                 ))}
             </div>
@@ -547,11 +564,15 @@ export function AnalysisPage({
         <BreakdownChart
           title="Embodied klimatpåverkan"
           items={result.embodied.breakdown}
+          scopeLabel={getResultScopeLabel("embodied")}
+          scopeNote={getResultScopeNote("embodied")}
           onExplain={onExplain}
         />
         <BreakdownChart
           title="Driftutsläpp per år"
           items={result.operational.breakdown}
+          scopeLabel={getResultScopeLabel("operational")}
+          scopeNote={getResultScopeNote("operational")}
           onExplain={onExplain}
         />
       </section>
@@ -560,11 +581,13 @@ export function AnalysisPage({
         <BreakdownChart
           title="Mobilitet per år"
           items={result.mobility.breakdown}
+          scopeLabel={getResultScopeLabel("mobility")}
+          scopeNote={getResultScopeNote("mobility")}
           onExplain={onExplain}
         />
         <section className="report-card">
           <div className="section-heading">
-            <p className="eyebrow">Site</p>
+            <p className="eyebrow">Site / läge</p>
             <h3>Platsbundna drivare</h3>
           </div>
           {siteDrivers.length ? (

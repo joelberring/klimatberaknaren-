@@ -12,6 +12,8 @@ interface BenchmarkPositionChartProps {
   title: string;
   unit: string;
   rows: BenchmarkPositionRow[];
+  scopeLabel?: string;
+  scopeNote?: string;
 }
 
 function getMarkerClass(kind: BenchmarkPositionRow["kind"]) {
@@ -49,7 +51,9 @@ function getKindLabel(kind: BenchmarkPositionRow["kind"]) {
 export function BenchmarkPositionChart({
   title,
   unit,
-  rows
+  rows,
+  scopeLabel,
+  scopeNote
 }: BenchmarkPositionChartProps) {
   if (rows.length === 0) {
     return (
@@ -58,6 +62,12 @@ export function BenchmarkPositionChart({
           <p className="eyebrow">Benchmarkdiagram</p>
           <h3>{title}</h3>
         </div>
+        {scopeLabel || scopeNote ? (
+          <div className="benchmark-scope-copy">
+            {scopeLabel ? <span className="scope-badge">{scopeLabel}</span> : null}
+            {scopeNote ? <p className="microcopy">{scopeNote}</p> : null}
+          </div>
+        ) : null}
         <div className="empty-state-workbench">
           <p className="microcopy">
             Inga benchmarkvärden är valda ännu. Välj minst en benchmark- eller standardprofil för att visa diagrammet.
@@ -75,9 +85,10 @@ export function BenchmarkPositionChart({
         <p className="eyebrow">Benchmarkdiagram</p>
         <h3>{title}</h3>
       </div>
-      <p className="microcopy">
-        Varje rad visar ett referensvärde på samma skala. Den svarta markeringen är aktuellt resultat.
-      </p>
+      <div className="benchmark-scope-copy">
+        {scopeLabel ? <span className="scope-badge">{scopeLabel}</span> : null}
+        {scopeNote ? <p className="microcopy">{scopeNote}</p> : null}
+      </div>
       <div className="benchmark-list" role="img" aria-label={title}>
         {rows.map((row) => (
           <article key={row.id} className={`benchmark-row-card benchmark-row-card-${row.kind}`}>

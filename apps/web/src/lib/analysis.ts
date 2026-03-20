@@ -1,4 +1,5 @@
 import {
+  COMPARISON_METRICS,
   LABELS,
   formatNumber,
   labelUrbanContext,
@@ -137,6 +138,124 @@ function sourceLabel(source: CalculationExplanation["inputs"][number]["source"])
   }
 
   return "Referensdata";
+}
+
+export type ResultScopeKey = "total" | "embodied" | "operational" | "mobility" | "site";
+
+const RESULT_SCOPE_META: Record<ResultScopeKey, { label: string; note: string }> = {
+  total: {
+    label: "Total livscykel",
+    note: "Hela kalkylens sammanlagda resultat, uppdelat i embodied, drift, mobilitet och site."
+  },
+  embodied: {
+    label: "Embodied A1-A5",
+    note: "Stomme, grundläggning, klimatskal och installationer i uppförandet."
+  },
+  operational: {
+    label: "Drift / B6",
+    note: "Energi, värme och drift över byggnadens livslängd."
+  },
+  mobility: {
+    label: "Mobilitet",
+    note: "Vardagsresor, tillgänglighet och parkeringsstyrning över livslängden."
+  },
+  site: {
+    label: "Site / läge",
+    note: "Tomt, läge, mark och andra platsbundna drivare."
+  }
+};
+
+export function getResultScopeLabel(scope: ResultScopeKey) {
+  return RESULT_SCOPE_META[scope].label;
+}
+
+export function getResultScopeNote(scope: ResultScopeKey) {
+  return RESULT_SCOPE_META[scope].note;
+}
+
+export function getBenchmarkReferenceTypeLabel(profile: BenchmarkProfile | StandardProfile) {
+  if ("scheme" in profile) {
+    return `${LABELS.standardScheme[profile.scheme]} screeningprofil`;
+  }
+
+  return "Kommunprofil";
+}
+
+export function getBenchmarkCoverageLabel(profile: BenchmarkProfile | StandardProfile) {
+  const supportedMetrics = COMPARISON_METRICS.filter((metric) => {
+    if ("scheme" in profile) {
+      if (metric === "total") {
+        return false;
+      }
+
+      return profile.metrics[metric] !== undefined;
+    }
+
+    if (metric === "perM2") {
+      return profile.normalPerM2KgCo2e !== undefined || profile.targetPerM2KgCo2e !== undefined;
+    }
+
+    if (metric === "perPerson") {
+      return (
+        profile.normalPerPersonKgCo2e !== undefined || profile.targetPerPersonKgCo2e !== undefined
+      );
+    }
+
+    if (metric === "perHa") {
+      return profile.normalPerHaKgCo2e !== undefined || profile.targetPerHaKgCo2e !== undefined;
+    }
+
+    return false;
+  }).map((metric) => metricLabel(metric).toLowerCase());
+
+  const missingMetrics = COMPARISON_METRICS.filter((metric) => {
+    if ("scheme" in profile) {
+      if (metric === "total") {
+        return false;
+      }
+
+      return profile.metrics[metric] === undefined;
+    }
+
+    if (metric === "perM2") {
+      return profile.normalPerM2KgCo2e === undefined && profile.targetPerM2KgCo2e === undefined;
+    }
+
+    if (metric === "perPerson") {
+      return (
+        profile.normalPerPersonKgCo2e === undefined && profile.targetPerPersonKgCo2e === undefined
+      );
+    }
+
+    if (metric === "perHa") {
+      return profile.normalPerHaKgCo2e === undefined && profile.targetPerHaKgCo2e === undefined;
+    }
+
+    return true;
+  }).map((metric) => metricLabel(metric).toLowerCase());
+
+  const supportText = supportedMetrics.length
+    ? `Stöd: ${supportedMetrics.join(", ")}`
+    : "Stöd saknas";
+  const missingText = missingMetrics.length ? ` • saknar ${missingMetrics.join(", ")}` : "";
+
+  if ("scheme" in profile) {
+    return `${supportText}${missingText} • total härleds vid behov`;
+  }
+
+  return `${supportText}${missingText}${supportedMetrics.length ? " • total härleds vid behov" : ""}`;
+}
+
+export function getBenchmarkScopeSummaryCopy(selectedMetric: ComparisonMetric) {
+  return `Vald visning: ${metricLabel(
+    selectedMetric
+  )}. Benchmarkerna är screeningreferenser på valt nyckeltal och ska läsas tillsammans med delposterna nedan.`;
+}
+
+export function getBenchmarkScopeDiagramCopy(selectedMetric: ComparisonMetric) {
+  return `Diagrammet visar ${metricLabel(
+    selectedMetric
+  ).toLowerCase()} som screeningreferens. Delposterna nedan visar vad som faktiskt ingår i jämförelsen.`;
 }
 
 export function getInputUncertaintyLevel(
@@ -812,11 +931,11 @@ export function buildBranchRows(result: CalculationResult): AnalysisBranchRow[] 
   return [
     {
       id: "embodied",
-      label: "Embodied",
+      label: "Embodied A1-A5",
       value: result.embodied.totalKgCo2e,
       unit: "kg CO2e",
       sharePct: (result.embodied.totalKgCo2e / total) * 100,
-      note: "Stomme, fasad, tak, grund och andra uppförandeposter.",
+      note: getResultScopeNote("embodied"),
       traceKey: embodiedTraceKeys[0] ?? result.totals.traceKey,
       traceKeys: embodiedTraceKeys,
       breakdown: result.embodied.breakdown.map((item) => ({
@@ -828,11 +947,11 @@ export function buildBranchRows(result: CalculationResult): AnalysisBranchRow[] 
     },
     {
       id: "operational",
-      label: "Drift",
+      label: "Drift / B6",
       value: result.operational.lifetimeKgCo2e,
       unit: "kg CO2e",
       sharePct: (result.operational.lifetimeKgCo2e / total) * 100,
-      note: "Livslängdsutsläpp från energibehov och uppvärmning.",
+      note: getResultScopeNote("operational"),
       traceKey: operationalTraceKeys[0] ?? result.perM2.traceKey,
       traceKeys: operationalTraceKeys,
       breakdown: result.operational.breakdown.map((item) => ({
@@ -848,7 +967,7 @@ export function buildBranchRows(result: CalculationResult): AnalysisBranchRow[] 
       value: result.mobility.lifetimeKgCo2e,
       unit: "kg CO2e",
       sharePct: (result.mobility.lifetimeKgCo2e / total) * 100,
-      note: "Vardagsresor och tillgänglighet i läget.",
+      note: getResultScopeNote("mobility"),
       traceKey: mobilityTraceKeys[0] ?? result.mobility.breakdown[0]?.traceKey ?? result.perPerson.traceKey,
       traceKeys: mobilityTraceKeys,
       breakdown: result.mobility.breakdown.map((item) => ({
@@ -860,13 +979,13 @@ export function buildBranchRows(result: CalculationResult): AnalysisBranchRow[] 
     },
     {
       id: "site",
-      label: "Site",
+      label: "Site / läge",
       value: siteValue,
       unit: "kg CO2e",
       sharePct: (siteValue / total) * 100,
       note:
         siteDrivers.length > 0
-          ? "Tomt, läge, grundläggning och andra platsbundna drivare."
+          ? getResultScopeNote("site")
           : "Ingen explicit site-post med numeriskt värde i den här körningen.",
       traceKey: siteTraceKeys[0],
       traceKeys: siteTraceKeys,
@@ -985,7 +1104,7 @@ export function buildBenchmarkRows(
       label: "Aktuell körning",
       value: getScenarioMetricValue(result, selectedMetric),
       kind: "actual" as const,
-      meta: "Senaste beräkningen"
+      meta: "Total livscykel i modellen"
     },
     ...selectedBenchmarks.flatMap((profile) => [
       {
@@ -993,14 +1112,14 @@ export function buildBenchmarkRows(
         label: `${profile.name} normal`,
         value: getBenchmarkMetricValue(profile, selectedMetric, "Normalvärde", result),
         kind: "benchmark" as const,
-        meta: `${profile.sourceLabel} • v${profile.version}`
+        meta: `${getBenchmarkReferenceTypeLabel(profile)} • ${profile.sourceLabel} • v${profile.version}`
       },
       {
         id: `${profile.id}-target`,
         label: `${profile.name} mål`,
         value: getBenchmarkMetricValue(profile, selectedMetric, "Målvärde", result),
         kind: "target" as const,
-        meta: `Uppdaterad ${profile.updatedAt}`
+        meta: `${getBenchmarkReferenceTypeLabel(profile)} • uppdaterad ${profile.updatedAt}`
       }
     ]),
     ...selectedStandards
@@ -1010,7 +1129,7 @@ export function buildBenchmarkRows(
         label: profile.label,
         value: getStandardMetricValue(profile, selectedMetric) ?? 0,
         kind: "standard" as const,
-        meta: `${LABELS.standardScheme[profile.scheme]} ${profile.version}${
+        meta: `${getBenchmarkReferenceTypeLabel(profile)} • ${LABELS.standardScheme[profile.scheme]} ${profile.version}${
           standardDataset ? ` • ${standardDataset.updatedAt}` : ""
         }`
       }))

@@ -64,6 +64,12 @@ import { Building3DViewer } from "./components/Building3DViewer";
 import { DecisionWorkbench } from "./components/DecisionWorkbench";
 import {
   getActiveScenarioRun,
+  getBenchmarkCoverageLabel,
+  getBenchmarkReferenceTypeLabel,
+  getBenchmarkScopeDiagramCopy,
+  getBenchmarkScopeSummaryCopy,
+  getResultScopeLabel,
+  getResultScopeNote,
   getInputUncertaintyLabel,
   getInputUncertaintyLevel
 } from "./lib/analysis";
@@ -1478,19 +1484,26 @@ function ResultMatrix({
           <p className="eyebrow">Benchmark</p>
           <h3>Benchmarkstatus och referenser</h3>
         </div>
-        <p className="microcopy">
-          Vald visning: {getMetricLabel(selectedMetric)}. Resultatet jämförs mot kommunprofil och valda standardprofiler med tydliga källspår.
-        </p>
+        <p className="microcopy">{getBenchmarkScopeSummaryCopy(selectedMetric)}</p>
         <div className="report-dual-grid">
           <BenchmarkPositionChart
             title={`Position för ${getMetricLabel(selectedMetric).toLowerCase()}`}
             unit={getScenarioMetricUnit(candidateResult, selectedMetric)}
             rows={benchmarkRows}
+            scopeLabel={getResultScopeLabel("total")}
+            scopeNote={getBenchmarkScopeDiagramCopy(selectedMetric)}
           />
           <section className="report-card">
             <div className="section-heading">
               <p className="eyebrow">Benchmarkstatus</p>
               <h3>Aktuella gap</h3>
+            </div>
+            <div className="benchmark-scope-copy">
+              <span className="scope-badge">Screeningreferenser</span>
+              <p className="microcopy">
+                Kommunprofiler och standardprofiler är referenser för tidiga skeden, inte
+                officiella certifieringsutfall.
+              </p>
             </div>
             <div className="comparison-list">
               {benchmarkComparisons.map((item) => (
@@ -1520,22 +1533,26 @@ function ResultMatrix({
               {selectedBenchmarks.map((profile) => (
                 <div key={profile.id} className="report-table-row">
                   <strong>{profile.name}</strong>
-                  <span>{profile.applicability}</span>
+                  <span>
+                    {getBenchmarkReferenceTypeLabel(profile)} • {profile.applicability}
+                  </span>
                   <span>
                     {profile.sourceLabel} • v{profile.version} • {profile.updatedAt}
                   </span>
+                  <span>{getBenchmarkCoverageLabel(profile)}</span>
                 </div>
               ))}
               {selectedStandards.map((profile) => (
                 <div key={profile.id} className="report-table-row">
                   <strong>{profile.label}</strong>
                   <span>
-                    {LABELS.standardScheme[profile.scheme]} • {profile.version} • {profile.level}
+                    {getBenchmarkReferenceTypeLabel(profile)} • {profile.version} • {profile.level}
                   </span>
                   <span>
                     {resolveSourceTitles(profile.sourceIds, dataSources).join(", ") || "Bundlad referenskälla"}
                     {standardDataset ? ` • uppdaterad ${standardDataset.updatedAt}` : ""}
                   </span>
+                  <span>{getBenchmarkCoverageLabel(profile)}</span>
                 </div>
               ))}
             </div>
@@ -1546,7 +1563,7 @@ function ResultMatrix({
       <section className="result-section">
         <div className="section-heading">
           <p className="eyebrow">Form och läge</p>
-          <h3>Byggnadsform, kompakthet och centralitet</h3>
+          <h3>Byggnadsform, kompakthet och site / läge</h3>
         </div>
         <div className="comparison-list">
           <article className="comparison-card">
@@ -1679,16 +1696,22 @@ function ResultMatrix({
           <BreakdownChart
             title="Embodied klimatpåverkan"
             items={candidateResult.embodied.breakdown}
+            scopeLabel={getResultScopeLabel("embodied")}
+            scopeNote={getResultScopeNote("embodied")}
             onExplain={onExplain}
           />
           <BreakdownChart
             title="Driftutsläpp per år"
             items={candidateResult.operational.breakdown}
+            scopeLabel={getResultScopeLabel("operational")}
+            scopeNote={getResultScopeNote("operational")}
             onExplain={onExplain}
           />
           <BreakdownChart
             title="Mobilitet per år"
             items={candidateResult.mobility.breakdown}
+            scopeLabel={getResultScopeLabel("mobility")}
+            scopeNote={getResultScopeNote("mobility")}
             onExplain={onExplain}
           />
         </div>
