@@ -106,6 +106,7 @@ const inputLabelMap: Record<string, string> = {
   parkingGarageFloors: "Garagevåningar",
   siteLat: "Latitud",
   siteLon: "Longitud",
+  distanceToServiceM: "Avstånd till service",
   distanceToTransitStopM: "Avstånd till hållplats",
   distanceToRailStationM: "Avstånd till station",
   departuresPerHour: "Avgångar per timme",
@@ -704,6 +705,13 @@ export function buildSnapshotHighlights(snapshot?: CalculateRequest | null): Ana
     }
   }
 
+  if (snapshot.distanceToServiceM !== undefined) {
+    highlights.push({
+      label: "Service",
+      value: `${formatNumber(snapshot.distanceToServiceM)} m`
+    });
+  }
+
   return highlights;
 }
 
@@ -730,6 +738,7 @@ export function buildMobilityFactorRows(
   const transitStopDistance = mobility?.distanceToTransitStopM ?? snapshot?.transitOverrides?.distanceToTransitStopM;
   const railDistance = mobility?.distanceToRailStationM ?? snapshot?.transitOverrides?.distanceToRailStationM;
   const departuresPerHour = mobility?.departuresPerHour ?? snapshot?.transitOverrides?.departuresPerHour ?? 0;
+  const serviceDistance = mobility?.distanceToServiceM ?? snapshot?.distanceToServiceM;
   const serviceTripShare = resolveServiceTripShare(buildingType);
 
   const contextScore =
@@ -742,7 +751,7 @@ export function buildMobilityFactorRows(
           : 48;
 
   const parkingScore = Math.max(0, Math.min(100, Math.round(100 - Math.min(90, parkingIntensity * 90))));
-  const transitScore = transitStopDistance
+  const transitScore = transitStopDistance !== undefined
     ? scoreFromRange(
         transitStopDistance,
         [
@@ -753,7 +762,7 @@ export function buildMobilityFactorRows(
         24
       )
     : 18;
-  const railScore = railDistance
+  const railScore = railDistance !== undefined
     ? scoreFromRange(
         railDistance,
         [
@@ -762,6 +771,18 @@ export function buildMobilityFactorRows(
           { max: 5000, score: 42 }
         ],
         22
+      )
+    : 18;
+  const serviceAccessScore = serviceDistance !== undefined
+    ? scoreFromRange(
+        serviceDistance,
+        [
+          { max: 200, score: 96 },
+          { max: 500, score: 80 },
+          { max: 1000, score: 58 },
+          { max: 2000, score: 36 }
+        ],
+        18
       )
     : 18;
   const departuresScore = Math.max(0, Math.min(100, Math.round(departuresPerHour * 8)));
@@ -817,6 +838,23 @@ export function buildMobilityFactorRows(
           : "Använd plats eller transitöverskrivning för att se effekten.",
       score: transitScore,
       direction: transitScore >= 75 ? "transit" : transitScore >= 45 ? "mixed" : "car"
+    },
+    {
+      id: "serviceAccess",
+      label: "Avstånd till service",
+      value: serviceDistance !== undefined ? `${formatNumber(serviceDistance)} m` : "Ej angivet",
+      note:
+        serviceDistance !== undefined
+          ? serviceDistance <= 200
+            ? "Mycket nära vardagsservice dämpar bilberoendet i modellen."
+            : serviceDistance <= 500
+              ? "Ganska nära service ger en liten men tydlig lättnad för bilandel."
+              : serviceDistance <= 1000
+                ? "Service finns i rimligt gångavstånd och ger en mindre effekt."
+                : "Längre serviceavstånd ger ingen extra dämpning."
+          : "Ange avstånd till service för att visa denna extra platsfaktor.",
+      score: serviceAccessScore,
+      direction: serviceAccessScore >= 75 ? "transit" : serviceAccessScore >= 45 ? "mixed" : "car"
     },
     {
       id: "railStation",

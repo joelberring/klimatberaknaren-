@@ -249,6 +249,7 @@ function scoreLocation(input: CalculateRequest | undefined, result: CalculationR
   const parkingSpaces = input?.parkingSpaces ?? 0;
   const people = Math.max(result.population.totalPeople, 1);
   const parkingIntensity = parkingSpaces / people;
+  const serviceDistance = input?.distanceToServiceM ?? result.mobility.inputs.distanceToServiceM;
 
   const base =
     context === "stockholm_innerstad"
@@ -261,8 +262,20 @@ function scoreLocation(input: CalculateRequest | undefined, result: CalculationR
   const accessBonus = accessibility === "high" ? 12 : accessibility === "medium" ? 4 : -10;
   const parkingPenalty = Math.min(16, parkingIntensity * 22);
   const garagePenalty = (input?.parkingStructureType ?? "none") === "garage_under_mark" ? 4 : (input?.parkingStructureType ?? "none") === "garage_ovan_mark" ? 2 : 0;
-  const missingTransitPenalty = input?.siteLocation || input?.transitOverrides ? 0 : 4;
-  return clampScore(base + accessBonus - parkingPenalty - garagePenalty - missingTransitPenalty);
+  const serviceBonus =
+    serviceDistance !== undefined
+      ? serviceDistance <= 200
+        ? 6
+        : serviceDistance <= 500
+          ? 4
+          : serviceDistance <= 1000
+            ? 2
+            : 0
+      : 0;
+  const missingTransitPenalty = input?.siteLocation || input?.transitOverrides ? 0 : serviceDistance !== undefined ? 2 : 4;
+  return clampScore(
+    base + accessBonus + serviceBonus - parkingPenalty - garagePenalty - missingTransitPenalty
+  );
 }
 
 function scoreForm(input: CalculateRequest | undefined, result: CalculationResult) {
@@ -651,7 +664,12 @@ export function buildDecisionSummaries(
           note: `${labels.urbanContext} • tillgänglighet ${LABELS.urbanContext[entry.run.result.mobility.inputs.urbanContext]}`,
           details: [
             `Mobilitet: ${formatNumber(entry.run.result.mobility.annualKgCo2e)} kg CO2e/år`,
-            `Parkeringsnivå: ${entry.input?.parkingSpaces ?? 0} platser`
+            `Parkeringsnivå: ${entry.input?.parkingSpaces ?? 0} platser`,
+            `Serviceavstånd: ${
+              entry.input?.distanceToServiceM !== undefined
+                ? `${formatNumber(entry.input.distanceToServiceM)} m`
+                : "Ej angivet"
+            }`
           ]
         },
         {

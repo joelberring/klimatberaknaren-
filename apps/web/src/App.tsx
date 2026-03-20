@@ -101,6 +101,7 @@ interface FormState {
   parkingGarageFloors: string;
   siteLat: string;
   siteLon: string;
+  distanceToServiceM: string;
   distanceToTransitStopM: string;
   distanceToRailStationM: string;
   departuresPerHour: string;
@@ -150,6 +151,7 @@ const initialForm: FormState = {
   parkingGarageFloors: "",
   siteLat: "",
   siteLon: "",
+  distanceToServiceM: "",
   distanceToTransitStopM: "",
   distanceToRailStationM: "",
   departuresPerHour: "",
@@ -333,13 +335,14 @@ function payloadToForm(payload?: CalculateRequest): FormState {
     parkingGarageFloors: payload.parkingGarageFloors ? String(payload.parkingGarageFloors) : "",
     siteLat: payload.siteLocation ? String(payload.siteLocation.lat) : "",
     siteLon: payload.siteLocation ? String(payload.siteLocation.lon) : "",
-    distanceToTransitStopM: payload.transitOverrides?.distanceToTransitStopM
+    distanceToServiceM: payload.distanceToServiceM !== undefined ? String(payload.distanceToServiceM) : "",
+    distanceToTransitStopM: payload.transitOverrides?.distanceToTransitStopM !== undefined
       ? String(payload.transitOverrides.distanceToTransitStopM)
       : "",
-    distanceToRailStationM: payload.transitOverrides?.distanceToRailStationM
+    distanceToRailStationM: payload.transitOverrides?.distanceToRailStationM !== undefined
       ? String(payload.transitOverrides.distanceToRailStationM)
       : "",
-    departuresPerHour: payload.transitOverrides?.departuresPerHour
+    departuresPerHour: payload.transitOverrides?.departuresPerHour !== undefined
       ? String(payload.transitOverrides.departuresPerHour)
       : "",
     landType: payload.landType ?? "tidigare_bebyggd",
@@ -454,6 +457,11 @@ function buildPayload(form: FormState) {
       lat: siteLat,
       lon: siteLon
     };
+  }
+
+  const distanceToServiceM = toNumber(form.distanceToServiceM);
+  if (distanceToServiceM !== undefined) {
+    payload.distanceToServiceM = distanceToServiceM;
   }
 
   const distanceToTransitStopM = toNumber(form.distanceToTransitStopM);
@@ -2073,6 +2081,7 @@ function ScenarioMatrixEditor({
           distanceToTransitStopM: payload.transitOverrides?.distanceToTransitStopM,
           distanceToRailStationM: payload.transitOverrides?.distanceToRailStationM,
           departuresPerHour: payload.transitOverrides?.departuresPerHour,
+          distanceToServiceM: payload.distanceToServiceM,
           interventionType: payload.interventionType,
           existingGrossFloorAreaM2: payload.existingBuilding?.grossFloorAreaM2,
           existingBuildYear: payload.existingBuilding?.buildYear,
@@ -2559,6 +2568,18 @@ function ScenarioMatrixEditor({
                     inputMode="decimal"
                     value={row.form.departuresPerHour}
                     onChange={(event) => updateDraftRow(row.id, "departuresPerHour", event.target.value)}
+                    disabled={disabled}
+                  />
+                )
+              },
+              {
+                label: "Serviceavstånd",
+                render: (row: ScenarioMatrixDraft) => (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={row.form.distanceToServiceM}
+                    onChange={(event) => updateDraftRow(row.id, "distanceToServiceM", event.target.value)}
                     disabled={disabled}
                   />
                 )
@@ -3806,6 +3827,17 @@ export default function App() {
                     placeholder="Exempel: 12"
                   />
                   <span className="microcopy">Hjälper modellen att skilja starkt kollektivtrafikläge från svagare lägen.</span>
+                </label>
+                <label>
+                  Avstånd till service (m)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={form.distanceToServiceM}
+                    onChange={(event) => update("distanceToServiceM", event.target.value)}
+                    placeholder="Exempel: 200"
+                  />
+                  <span className="microcopy">Kortare avstånd till vardagsservice kan dämpa bilandelen i mobilitetsmodellen.</span>
                 </label>
               </div>
             </section>

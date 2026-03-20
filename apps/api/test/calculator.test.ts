@@ -236,6 +236,79 @@ describe("calculateClimateImpact", () => {
     expect(highAccess.totals.value).toBeLessThan(lowAccess.totals.value);
   });
 
+  it("does not force partially provided transit overrides down to low accessibility", () => {
+    const baseline = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 12
+    });
+
+    const partialTransit = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 12,
+      transitOverrides: {
+        distanceToTransitStopM: 250,
+        departuresPerHour: 12
+      }
+    });
+
+    expect(partialTransit.mobility.inputs.accessibilityBand).toBe("high");
+    expect(partialTransit.mobility.inputs.distanceToRailStationM).toBeUndefined();
+    expect(partialTransit.mobility.annualKgCo2e).toBeLessThan(baseline.mobility.annualKgCo2e);
+  });
+
+  it("reduces mobility impact when service is closer to the site", () => {
+    const farService = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 0,
+      urbanContext: "urban",
+      transitOverrides: {
+        distanceToTransitStopM: 250,
+        distanceToRailStationM: 700,
+        departuresPerHour: 12
+      },
+      distanceToServiceM: 3000
+    });
+
+    const nearService = calculateClimateImpact({
+      buildingType: "flerbostadshus",
+      grossFloorAreaM2: 2400,
+      buildYear: 2030,
+      frameMaterial: "betong",
+      energyStandard: "normal",
+      heatingType: "fjarrvarme",
+      estimatedResidents: 60,
+      parkingSpaces: 0,
+      urbanContext: "urban",
+      transitOverrides: {
+        distanceToTransitStopM: 250,
+        distanceToRailStationM: 700,
+        departuresPerHour: 12
+      },
+      distanceToServiceM: 150
+    });
+
+    expect(nearService.mobility.annualKgCo2e).toBeLessThan(farService.mobility.annualKgCo2e);
+    expect(nearService.mobility.inputs.distanceToServiceM).toBe(150);
+  });
+
   it("shows lower embodied total for ombyggnad than equivalent nybyggnad when retention is high", () => {
     const newBuild = calculateClimateImpact({
       buildingType: "kontor",

@@ -54,6 +54,7 @@ export const calculateSchema = z.object({
       lon: z.number().min(-180).max(180)
     })
     .optional(),
+  distanceToServiceM: z.number().min(0).max(100_000).optional(),
   transitOverrides: z
     .object({
       distanceToTransitStopM: z.number().min(0).max(100_000).optional(),

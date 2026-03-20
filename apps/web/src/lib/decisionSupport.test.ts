@@ -130,7 +130,7 @@ function makeResult(
       totals: ["exp-1"],
       perM2: ["exp-1"]
     }
-  } as CalculationResult;
+  } as unknown as CalculationResult;
 }
 
 function makeScenario(id: string, name: string, inputSnapshot: CalculateRequest, result: CalculationResult): Scenario {
@@ -247,5 +247,78 @@ describe("decisionSupport", () => {
     expect(summaries[0]?.objectiveScore).toBeGreaterThan(summaries[1]?.objectiveScore ?? 0);
     expect(summaries[0]?.locationScore).toBeGreaterThan(summaries[1]?.locationScore ?? 0);
     expect(summaries[0]?.robustnessScore).toBeGreaterThan(summaries[1]?.robustnessScore ?? 0);
+  });
+
+  it("gives a small location bonus when service is close by", () => {
+    const nearServiceScenario = makeScenario(
+      "scenario-near-service",
+      "Nära service",
+      {
+        buildingType: "flerbostadshus",
+        grossFloorAreaM2: 1200,
+        buildYear: 2030,
+        frameMaterial: "tra",
+        energyStandard: "modern",
+        heatingType: "fjarrvarme",
+        buildingForm: "kompakt",
+        urbanContext: "urban",
+        floorsAboveGround: 6,
+        buildingFootprintM2: 220,
+        parkingStructureType: "none",
+        parkingSpaces: 0,
+        distanceToServiceM: 120
+      },
+      makeResult({
+        total: 420000,
+        perM2: 350,
+        perPerson: 15000,
+        uncertaintyRangePct: 12,
+        accessibilityBand: "high",
+        urbanContext: "stockholm_innerstad",
+        defaultsApplied: [],
+        internalAssumptionEvidenceCount: 0
+      })
+    );
+
+    const farServiceScenario = makeScenario(
+      "scenario-far-service",
+      "Långt till service",
+      {
+        buildingType: "flerbostadshus",
+        grossFloorAreaM2: 1200,
+        buildYear: 2030,
+        frameMaterial: "tra",
+        energyStandard: "modern",
+        heatingType: "fjarrvarme",
+        buildingForm: "kompakt",
+        urbanContext: "urban",
+        floorsAboveGround: 6,
+        buildingFootprintM2: 220,
+        parkingStructureType: "none",
+        parkingSpaces: 0,
+        distanceToServiceM: 1800
+      },
+      makeResult({
+        total: 420000,
+        perM2: 350,
+        perPerson: 15000,
+        uncertaintyRangePct: 12,
+        accessibilityBand: "high",
+        urbanContext: "stockholm_innerstad",
+        defaultsApplied: [],
+        internalAssumptionEvidenceCount: 0
+      })
+    );
+
+    const summaries = buildDecisionSummaries(
+      [nearServiceScenario, farServiceScenario],
+      "perM2",
+      "balance"
+    );
+
+    const nearSummary = summaries.find((summary) => summary.scenarioId === "scenario-near-service");
+    const farSummary = summaries.find((summary) => summary.scenarioId === "scenario-far-service");
+
+    expect(nearSummary?.locationScore).toBeGreaterThan(farSummary?.locationScore ?? 0);
   });
 });

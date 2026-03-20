@@ -163,6 +163,10 @@ function toPlanObject(
           ? normalizeString(properties.foundationType) as PlanObject["quickInput"]["foundationType"]
           : undefined,
       siteLocation,
+      distanceToServiceM:
+        properties.distanceToServiceM !== undefined
+          ? normalizeNumber(properties.distanceToServiceM, "distanceToServiceM")
+          : undefined,
       transitOverrides:
         properties.distanceToTransitStopM !== undefined ||
         properties.distanceToRailStationM !== undefined ||
@@ -326,6 +330,7 @@ export function importTabularRows(payload: ScenarioImportTabularRequest) {
         foundationType: row.foundationType,
         lat: row.lat,
         lon: row.lon,
+        distanceToServiceM: row.distanceToServiceM,
         distanceToTransitStopM: row.distanceToTransitStopM,
         distanceToRailStationM: row.distanceToRailStationM,
         departuresPerHour: row.departuresPerHour,

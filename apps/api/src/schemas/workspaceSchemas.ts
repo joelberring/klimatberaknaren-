@@ -115,6 +115,7 @@ export const scenarioQuickInputSchema = z.object({
       lon: z.number().min(-180).max(180)
     })
     .optional(),
+  distanceToServiceM: z.number().min(0).max(100_000).optional(),
   transitOverrides: z
     .object({
       distanceToTransitStopM: z.number().min(0).max(100_000).optional(),
@@ -190,6 +191,7 @@ const planObjectPropertySchema = z.object({
   foundationType: z.enum(FOUNDATION_TYPES).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lon: z.number().min(-180).max(180).optional(),
+  distanceToServiceM: z.number().min(0).optional(),
   distanceToTransitStopM: z.number().min(0).optional(),
   distanceToRailStationM: z.number().min(0).optional(),
   departuresPerHour: z.number().min(0).optional(),

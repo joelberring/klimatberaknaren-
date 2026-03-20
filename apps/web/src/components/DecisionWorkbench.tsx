@@ -133,7 +133,7 @@ export function DecisionWorkbench({
 
           <MobilityFactorPanel
             title={`Mobilitetsfaktorer i ${focusedSummary?.scenarioName ?? "det aktiva scenariot"}`}
-            summary="Här bryts lägesprofilen ned i de delar som starkast påverkar vardagsresandet: läge, parkering, hållplatsnärhet, stationnärhet, avgångstäthet och servicepåslag."
+            summary="Här bryts lägesprofilen ned i de delar som starkast påverkar vardagsresandet: läge, parkering, hållplatsnärhet, stationnärhet, avgångstäthet, servicenärhet och servicepåslag."
             rows={mobilityFactorRows}
           />
 

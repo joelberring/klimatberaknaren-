@@ -271,7 +271,7 @@ export function AnalysisPage({
 
       <MobilityFactorPanel
         title="Läge, parkering och kollektivtrafik"
-        summary="Panelen visar vilka platsfaktorer som i modellen driver bilandel, transitandel och servicepåslag. Högre poäng betyder starkare transitstöd eller lägre biltryck, medan parkeringsrad och serviceandel visar hur mycket vardagsresandet pressas åt ett mer bil- eller flerresedrivet håll."
+        summary="Panelen visar vilka platsfaktorer som i modellen driver bilandel, transitandel, servicenärhet och servicepåslag. Högre poäng betyder starkare transitstöd eller lägre biltryck, medan parkeringsrad, serviceavstånd och serviceandel visar hur mycket vardagsresandet pressas åt ett mer bil- eller flerresedrivet håll."
         rows={mobilityFactorRows}
       />
 

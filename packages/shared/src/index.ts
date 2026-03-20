@@ -193,6 +193,7 @@ export interface CalculateRequest {
   groundCondition?: GroundCondition;
   foundationType?: FoundationType;
   siteLocation?: SiteLocation;
+  distanceToServiceM?: number;
   transitOverrides?: TransitOverrides;
   interventionType?: InterventionType;
   existingBuilding?: ExistingBuildingInput;
@@ -293,6 +294,7 @@ export interface MobilityInputs {
   distanceToTransitStopM?: number;
   distanceToRailStationM?: number;
   departuresPerHour?: number;
+  distanceToServiceM?: number;
   source: "override" | "siteLocation" | "geometry" | "default";
 }
 

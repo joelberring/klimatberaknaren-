@@ -683,84 +683,93 @@ function resolveParkingStructureType(
   return request.parkingStructureType ?? "none";
 }
 
+function resolveTransitInputsFromSiteLocation(
+  siteLocation: NonNullable<CalculateRequest["siteLocation"]>,
+  mobilityReference: MobilityReferenceRecord
+) {
+  const nearestTransit = mobilityReference.transitNodes.reduce<{
+    distance: number;
+    departuresPerHour: number;
+    type: "rail" | "transit";
+  } | null>((nearest, node) => {
+    const distance = distanceMeters(siteLocation.lat, siteLocation.lon, node.lat, node.lon);
+    if (!nearest || distance < nearest.distance) {
+      return {
+        distance,
+        departuresPerHour: node.departuresPerHour,
+        type: node.type
+      };
+    }
+    return nearest;
+  }, null);
+
+  const nearestRail = mobilityReference.transitNodes
+    .filter((node) => node.type === "rail")
+    .reduce<number | null>((nearest, node) => {
+      const distance = distanceMeters(siteLocation.lat, siteLocation.lon, node.lat, node.lon);
+      return nearest === null || distance < nearest ? distance : nearest;
+    }, null);
+
+  return {
+    distanceToTransitStopM: nearestTransit ? round(nearestTransit.distance) : undefined,
+    distanceToRailStationM: nearestRail !== null ? round(nearestRail) : undefined,
+    departuresPerHour: nearestTransit?.departuresPerHour
+  };
+}
+
 function resolveMobilityInputs(
   request: CalculateRequest,
   mobilityReference: MobilityReferenceRecord
 ): MobilityInputs {
   const overrides = request.transitOverrides;
   const siteLocation = request.siteLocation;
+  const siteTransitInputs = siteLocation
+    ? resolveTransitInputsFromSiteLocation(siteLocation, mobilityReference)
+    : undefined;
+  const hasTransitOverrides =
+    overrides?.distanceToTransitStopM !== undefined ||
+    overrides?.distanceToRailStationM !== undefined ||
+    overrides?.departuresPerHour !== undefined;
 
-  if (overrides?.distanceToTransitStopM !== undefined || overrides?.distanceToRailStationM !== undefined) {
-    const departures =
-      overrides.departuresPerHour ??
-      mobilityReference.accessibilityBands.medium.minDeparturesPerHour;
-    const distanceToTransitStopM = overrides.distanceToTransitStopM ?? 9999;
-    const distanceToRailStationM = overrides.distanceToRailStationM ?? 9999;
-
-    return {
-      accessibilityBand: determineAccessibilityBand(
-        distanceToTransitStopM,
-        distanceToRailStationM,
-        departures,
-        mobilityReference
-      ),
-      urbanContext: resolveUrbanContext(request, determineAccessibilityBand(
-        distanceToTransitStopM,
-        distanceToRailStationM,
-        departures,
-        mobilityReference
-      )),
+  if (hasTransitOverrides) {
+    const distanceToTransitStopM =
+      overrides?.distanceToTransitStopM ?? siteTransitInputs?.distanceToTransitStopM;
+    const distanceToRailStationM =
+      overrides?.distanceToRailStationM ?? siteTransitInputs?.distanceToRailStationM;
+    const departuresPerHour = overrides?.departuresPerHour ?? siteTransitInputs?.departuresPerHour;
+    const accessibilityBand = determineAccessibilityBand(
       distanceToTransitStopM,
       distanceToRailStationM,
-      departuresPerHour: departures,
+      departuresPerHour,
+      mobilityReference
+    );
+
+    return {
+      accessibilityBand,
+      urbanContext: resolveUrbanContext(request, accessibilityBand),
+      distanceToTransitStopM,
+      distanceToRailStationM,
+      departuresPerHour,
+      distanceToServiceM: request.distanceToServiceM,
       source: "override"
     };
   }
 
-  if (siteLocation) {
-    const nearestTransit = mobilityReference.transitNodes.reduce<{
-      distance: number;
-      departuresPerHour: number;
-      type: "rail" | "transit";
-    } | null>((nearest, node) => {
-      const distance = distanceMeters(siteLocation.lat, siteLocation.lon, node.lat, node.lon);
-      if (!nearest || distance < nearest.distance) {
-        return {
-          distance,
-          departuresPerHour: node.departuresPerHour,
-          type: node.type
-        };
-      }
-      return nearest;
-    }, null);
-
-    const nearestRail = mobilityReference.transitNodes
-      .filter((node) => node.type === "rail")
-      .reduce<number | null>((nearest, node) => {
-        const distance = distanceMeters(siteLocation.lat, siteLocation.lon, node.lat, node.lon);
-        return nearest === null || distance < nearest ? distance : nearest;
-      }, null);
-
-    const distanceToTransitStopM = nearestTransit ? round(nearestTransit.distance) : 9999;
-    const distanceToRailStationM = nearestRail !== null ? round(nearestRail) : 9999;
-    const departuresPerHour = nearestTransit?.departuresPerHour ?? 0;
+  if (siteTransitInputs) {
+    const accessibilityBand = determineAccessibilityBand(
+      siteTransitInputs.distanceToTransitStopM,
+      siteTransitInputs.distanceToRailStationM,
+      siteTransitInputs.departuresPerHour,
+      mobilityReference
+    );
 
     return {
-      accessibilityBand: determineAccessibilityBand(
-        distanceToTransitStopM,
-        distanceToRailStationM,
-        departuresPerHour,
-        mobilityReference
-      ),
-      urbanContext: resolveUrbanContext(request, determineAccessibilityBand(
-        distanceToTransitStopM,
-        distanceToRailStationM,
-        departuresPerHour,
-        mobilityReference
-      )),
-      distanceToTransitStopM,
-      distanceToRailStationM,
-      departuresPerHour,
+      accessibilityBand,
+      urbanContext: resolveUrbanContext(request, accessibilityBand),
+      distanceToTransitStopM: siteTransitInputs.distanceToTransitStopM,
+      distanceToRailStationM: siteTransitInputs.distanceToRailStationM,
+      departuresPerHour: siteTransitInputs.departuresPerHour,
+      distanceToServiceM: request.distanceToServiceM,
       source: "siteLocation"
     };
   }
@@ -768,36 +777,69 @@ function resolveMobilityInputs(
   return {
     accessibilityBand: "medium",
     urbanContext: resolveUrbanContext(request, "medium"),
+    distanceToServiceM: request.distanceToServiceM,
     source: "default"
   };
 }
 
 function determineAccessibilityBand(
-  distanceToTransitStopM: number,
-  distanceToRailStationM: number,
-  departuresPerHour: number,
+  distanceToTransitStopM: number | undefined,
+  distanceToRailStationM: number | undefined,
+  departuresPerHour: number | undefined,
   mobilityReference: MobilityReferenceRecord
 ): "high" | "medium" | "low" {
   const high = mobilityReference.accessibilityBands.high;
   const medium = mobilityReference.accessibilityBands.medium;
+  const hasAnyKnownValue =
+    distanceToTransitStopM !== undefined ||
+    distanceToRailStationM !== undefined ||
+    departuresPerHour !== undefined;
+
+  if (!hasAnyKnownValue) {
+    return "medium";
+  }
 
   if (
-    distanceToTransitStopM <= high.maxTransitStopM &&
-    distanceToRailStationM <= high.maxRailStationM &&
-    departuresPerHour >= high.minDeparturesPerHour
+    (distanceToTransitStopM === undefined || distanceToTransitStopM <= high.maxTransitStopM) &&
+    (distanceToRailStationM === undefined || distanceToRailStationM <= high.maxRailStationM) &&
+    (departuresPerHour === undefined || departuresPerHour >= high.minDeparturesPerHour)
   ) {
     return "high";
   }
 
   if (
-    distanceToTransitStopM <= medium.maxTransitStopM &&
-    distanceToRailStationM <= medium.maxRailStationM &&
-    departuresPerHour >= medium.minDeparturesPerHour
+    (distanceToTransitStopM === undefined || distanceToTransitStopM <= medium.maxTransitStopM) &&
+    (distanceToRailStationM === undefined || distanceToRailStationM <= medium.maxRailStationM) &&
+    (departuresPerHour === undefined || departuresPerHour >= medium.minDeparturesPerHour)
   ) {
     return "medium";
   }
 
   return "low";
+}
+
+function resolveServiceDistanceShift(distanceToServiceM: number | undefined) {
+  if (distanceToServiceM === undefined) {
+    return 0;
+  }
+
+  if (distanceToServiceM <= 200) {
+    return -0.035;
+  }
+
+  if (distanceToServiceM <= 500) {
+    return -0.022;
+  }
+
+  if (distanceToServiceM <= 1000) {
+    return -0.012;
+  }
+
+  if (distanceToServiceM <= 2000) {
+    return -0.005;
+  }
+
+  return 0;
 }
 
 function calculateMobility(
@@ -828,6 +870,7 @@ function calculateMobility(
       : inputs.accessibilityBand === "medium"
         ? 0
         : 0.06;
+  const serviceShift = resolveServiceDistanceShift(inputs.distanceToServiceM);
   const parkingShift = clamp(
     parkingIntensity * mobilityReference.parkingCarShareAdjustmentPerSpacePerPerson * 2.5,
     0,
@@ -841,7 +884,7 @@ function calculateMobility(
         : 0;
   const carShift = Math.min(
     0.18,
-    parkingShift + centralityShift + accessibilityShift + garageShift
+    Math.max(-0.14, parkingShift + centralityShift + accessibilityShift + garageShift + serviceShift)
   );
   const adjustedCar = clamp(baseProfile.car + carShift, 0, 0.92);
   const transferable = baseProfile.transit + baseProfile.walkCycle;
@@ -924,6 +967,13 @@ function calculateMobility(
     inputs.source === "default"
       ? "Mobilitetsprofil defaultades till medium tillgänglighet eftersom koordinat eller transitavstånd saknas."
       : null,
+    inputs.source === "override" &&
+    request.transitOverrides &&
+    (request.transitOverrides.distanceToTransitStopM === undefined ||
+      request.transitOverrides.distanceToRailStationM === undefined ||
+      request.transitOverrides.departuresPerHour === undefined)
+      ? "Partiella transitöverskrivningar kompletterades med platsdata i stället för att falla tillbaka till extremvärden."
+      : null,
     request.urbanContext === undefined
       ? `Lägesprofil defaultades till ${labelUrbanContext(inputs.urbanContext).toLowerCase()} utifrån tillgänglighetsband.`
       : null
@@ -934,7 +984,7 @@ function calculateMobility(
       "explanation-mobility-total",
       "mobility.total",
       "Mobilitetslivscykel",
-      "Mobiliteten använder en försiktig resvaneproxy baserad på kollektivtrafiktillgänglighet, lägesprofil, byggnadstyp, personunderlag och parkeringstal.",
+      "Mobiliteten använder en försiktig resvaneproxy baserad på kollektivtrafiktillgänglighet, servicenärhet, lägesprofil, byggnadstyp, personunderlag och parkeringstal.",
       "personunderlag x resprofil x reseavstand x utslappsfaktorer",
       [
         `${people} personer x ${annualTripsPerPerson} resor/person,år i profilen ${inputs.accessibilityBand}`,
@@ -965,6 +1015,15 @@ function calculateMobility(
           label: "Parkeringsplatser",
           value: String(request.parkingSpaces ?? 0),
           source: request.parkingSpaces !== undefined ? "user" : "default"
+        },
+        {
+          key: "distanceToServiceM",
+          label: "Avstånd till service",
+          value:
+            inputs.distanceToServiceM !== undefined
+              ? `${inputs.distanceToServiceM} m`
+              : "Ej angivet",
+          source: request.distanceToServiceM !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
@@ -984,7 +1043,7 @@ function calculateMobility(
       "explanation-mobility-transit",
       "mobility.transit",
       "Kollektivtrafikresor",
-      "Kollektivtrafikandelen beror på tillgänglighetsband och kalibrerad resprofil för byggnadens användning.",
+      "Kollektivtrafikandelen beror på tillgänglighetsband, restider och kalibrerad resprofil för byggnadens användning.",
       "antal resor x kollektivtrafikandel x reseavstand x utslappsfaktor",
       [
         `${Math.round(annualTrips)} resor/år x ${Math.round(normalizedProfile.transit * 100)} % x ${mobilityReference.avgTripLengthKmByMode.transit} km`,
@@ -1005,6 +1064,15 @@ function calculateMobility(
           label: "Avgångar per timme",
           value: String(inputs.departuresPerHour ?? 0),
           source: inputs.departuresPerHour !== undefined ? "derived" : "default"
+        },
+        {
+          key: "distanceToServiceM",
+          label: "Avstånd till service",
+          value:
+            inputs.distanceToServiceM !== undefined
+              ? `${inputs.distanceToServiceM} m`
+              : "Ej angivet",
+          source: request.distanceToServiceM !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
@@ -1019,7 +1087,7 @@ function calculateMobility(
       "explanation-mobility-car",
       "mobility.car",
       "Bilresor",
-      "Bilandelen justeras uppåt när parkeringstalet är högt eller läget är mer bilorienterat, och nedåt i innerstadsläge och stark kollektivtrafik.",
+      "Bilandelen justeras uppåt när parkeringstalet är högt eller läget är mer bilorienterat, och nedåt i innerstadsläge, stark kollektivtrafik och när service ligger nära.",
       "antal resor x bilandel x reseavstand x utslappsfaktor",
       [
         `${Math.round(annualTrips)} resor/år x ${Math.round(normalizedProfile.car * 100)} % x ${mobilityReference.avgTripLengthKmByMode.car} km`,
@@ -1043,6 +1111,15 @@ function calculateMobility(
           label: "Parkeringslösning",
           value: LABELS.parkingStructureType[resolveParkingStructureType(request)],
           source: request.parkingStructureType !== undefined ? "user" : "default"
+        },
+        {
+          key: "distanceToServiceM",
+          label: "Avstånd till service",
+          value:
+            inputs.distanceToServiceM !== undefined
+              ? `${inputs.distanceToServiceM} m`
+              : "Ej angivet",
+          source: request.distanceToServiceM !== undefined ? "user" : "default"
         }
       ],
       defaultsApplied,
